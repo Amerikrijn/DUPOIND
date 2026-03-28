@@ -811,23 +811,23 @@ export default function App() {
       <nav className="mobile-bottom-nav">
         <button className={`nav-item-mobile ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>
           <Home className="nav-icon" size={20} />
-          <span>Home</span>
+          <span>{t('dashboard')}</span>
         </button>
         <button className={`nav-item-mobile ${activeTab === 'connect' ? 'active' : ''}`} onClick={() => setActiveTab('connect')}>
           <Shuffle className="nav-icon" size={20} />
-          <span>Connect</span>
+          <span>{t('connect')}</span>
         </button>
         <button className={`nav-item-mobile ${activeTab === 'wall' ? 'active' : ''}`} onClick={() => setActiveTab('wall')}>
           <Camera className="nav-icon" size={20} />
-          <span>Wall</span>
+          <span>{t('wall')}</span>
         </button>
         <button className={`nav-item-mobile ${activeTab === 'chat' ? 'active' : ''}`} onClick={() => setActiveTab('chat')}>
           <MessageSquare className="nav-icon" size={20} />
-          <span>Chat</span>
+          <span>{t('global_chat')}</span>
         </button>
         <button className={`nav-item-mobile ${activeTab === 'quiz' ? 'active' : ''}`} onClick={() => setActiveTab('quiz')}>
           <Trophy className="nav-icon" size={20} />
-          <span>Quiz</span>
+          <span>{t('quiz')}</span>
         </button>
       </nav>
           </div>

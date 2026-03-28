@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+console.log("Dupo-Atlas Status:", API_KEY ? "AI Key found" : "AI Key is MISSING");
 const genAI = API_KEY ? new GoogleGenerativeAI(API_KEY) : null;
 
 const SYSTEM_PROMPT = `
