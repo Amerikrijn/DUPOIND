@@ -158,7 +158,11 @@ export function useCultureData() {
     await batch.commit();
   };
 
-  return { facts, wotd, icebreakers, dishes, loading, seed };
+  const addDish = async (dish: Dish) => {
+    await addDoc(collection(db, 'dishes'), dish);
+  };
+
+  return { facts, wotd, icebreakers, dishes, loading, seed, addDish };
 }
 
 // ── Quiz ────────────────────────────────────────────────
@@ -174,7 +178,11 @@ export function useQuiz() {
     return unsub;
   }, []);
 
-  return { questions, loading };
+  const addQuestion = async (q: Omit<QuizQuestion, 'id'>) => {
+    await addDoc(collection(db, 'quiz'), q);
+  };
+
+  return { questions, loading, addQuestion };
 }
 
 // ── Squad Codes ──────────────────────────────────────────

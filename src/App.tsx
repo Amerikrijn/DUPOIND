@@ -1,17 +1,17 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
-  Globe, Heart, MessageSquare, Coffee, Send,
+  Globe, Heart, MessageSquare, Send,
   Shuffle, Camera, Home, LayoutGrid, Lock, ArrowRight, X, Check,
   Lightbulb, Image, BarChart2, Zap, Trophy, Database, Trash2, Plus, Utensils
 } from 'lucide-react';
 import './index.css';
 
-import { 
-  useWallPosts, useKudos, usePresence, useCultureData, useSquadCodes, useQuiz 
-} from './hooks/useFirestore';
+import { useWallPosts, useKudos, usePresence, useCultureData, useSquadCodes, useQuiz } from './hooks/useFirestore';
 import { useWeather } from './hooks/useWeather';
+import { useAutomatedCulture } from './hooks/useAutomatedCulture';
+import type { Holiday, DayCycle, CityFact, MealInspiration, RadioStation } from './hooks/useAutomatedCulture';
 import { getFullTranslation } from './utils/translate';
-import type { UserStatus, Dish, QuizQuestion } from './types';
+import type { UserStatus, Dish } from './types';
 import { QUIZ_QUESTIONS, INITIAL_POLLS } from './data';
 
 import { PollsTab } from './components/PollsTab';
@@ -127,9 +127,9 @@ function AuthScreen({ onLogin }: { onLogin: (name: string, city: string) => void
 }
 
 // ─────────────────────────────────────────
-// Cities Hub (real weather)
+// Cities Hub (real weather + holidays + sun)
 // ─────────────────────────────────────────
-function CitiesHub() {
+function CitiesHub({ holidays, dayCycles }: { holidays: Record<string, Holiday | null>, dayCycles: Record<string, DayCycle | null> }) {
   const [times, setTimes] = useState<Record<string, string>>({});
   const weather = useWeather();
 
@@ -145,19 +145,26 @@ function CitiesHub() {
 
   return (
     <div className="glass-panel">
-      <div className="panel-header"><Globe className="panel-icon" size={22} /><h2>Squad Hubs</h2><span className="live-badge">🌤️ Live weer</span></div>
+      <div className="panel-header"><Globe className="panel-icon" size={22} /><h2>Squad Hubs</h2><span className="live-badge">🌤️ Live weer &amp; Events</span></div>
       <div className="cities-container">
         {CITIES.map(city => {
           const w = weather[city.id];
+          const h = holidays[city.id];
+          const d = dayCycles[city.id];
           return (
-            <div key={city.id} className={`city-card ${city.id}`}>
-              <div className="city-header"><span>{city.flag} {city.name}</span><Coffee size={16} color="var(--text-muted)" /></div>
+            <div key={city.id} className={`city-card ${city.id} ${d?.status || ''}`}>
+              <div className="city-header">
+                <span>{city.flag} {city.name}</span>
+                <span className="sun-status" title={`Sunsise: ${d?.sunrise}, Sunset: ${d?.sunset}`}>
+                  {d?.status === 'night' ? '🌙' : d?.status === 'twilight' ? '🌅' : '☀️'}
+                </span>
+              </div>
               <div className="time-display">{times[city.id] || '--:--:--'}</div>
               <div className="city-meta">
                 <span className="meta-item">
                   {w?.loading ? '⏳' : `${w?.emoji} ${w?.temp}°C – ${w?.desc}`}
                 </span>
-                {city.holiday && <span className="city-holiday">🎉 {city.holiday}</span>}
+                {h && <span className="city-holiday" title={h.name}>🎉 {h.localName}</span>}
               </div>
             </div>
           );
@@ -168,42 +175,76 @@ function CitiesHub() {
 }
 
 // ─────────────────────────────────────────
-// Cultural Fact 
+// Squad Radio Widget
 // ─────────────────────────────────────────
-interface CultureFactProps { facts: { cityId: string; flag: string; city: string; fact: string }[] }
-function CulturalFact({ facts }: CultureFactProps) {
-  const fact = facts.length > 0
-    ? facts[new Date().getDate() % facts.length]
-    : { cityId: 'world', flag: '🌍', city: 'DUPOIND', fact: 'Laden van de leukste weetjes...' };
-
+function SquadRadio({ radios }: { radios: Record<string, RadioStation | null> }) {
   return (
-    <div className={`glass-panel cultural-fact-panel ${fact.cityId}`}>
-      <div className="panel-header"><Lightbulb className="panel-icon" size={22} /><h2>Cultureel Weetje</h2><span className="fact-city-badge">{fact.flag} {fact.city}</span></div>
-      <blockquote className="fact-text">"{fact.fact}"</blockquote>
+    <div className="glass-panel" style={{ marginTop: '1rem' }}>
+      <div className="panel-header"><Zap className="panel-icon" size={22} /><h2>Squad Radio (Live)</h2></div>
+      <div style={{ display: 'flex', gap: '1rem', overflowX: 'auto', padding: '0.5rem' }}>
+        {CITIES.map(city => {
+          const r = radios[city.id];
+          if (!r) return null;
+          return (
+            <a key={city.id} href={r.url} target="_blank" rel="noreferrer" className={`radio-card ${city.id}`} 
+               style={{ flex: '1', minWidth: '120px', textDecoration: 'none', background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '0.75rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+              {r.favicon ? <img src={r.favicon} alt="" style={{ width: 32, height: 32, borderRadius: '4px' }} /> : <div style={{ fontSize: '1.5rem' }}>📻</div>}
+              <div style={{ fontSize: '0.75rem', fontWeight: 'bold', textAlign: 'center', color: 'white' }}>{r.name}</div>
+              <div style={{ fontSize: '0.65rem', opacity: 0.6 }}>{city.flag} {city.name}</div>
+            </a>
+          );
+        })}
+      </div>
     </div>
   );
 }
 
 // ─────────────────────────────────────────
-// Local Flavors 
+/* Replaced CulturalFact following the api approach */
 // ─────────────────────────────────────────
-function LocalFlavors({ dishes }: { dishes: Dish[] }) {
+function CulturalFact({ facts, userCityId }: { facts: Record<string, CityFact | null>, userCityId: string }) {
+  const fact = facts[userCityId];
+  const cityName = getCityName(userCityId);
+
+  return (
+    <div className={`glass-panel cultural-fact-panel ${userCityId}`}>
+      <div className="panel-header"><Lightbulb className="panel-icon" size={22} /><h2>Wiki Fact: {cityName}</h2><span className="fact-city-badge">Live API</span></div>
+      {fact ? (
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
+          {fact.thumbnail && <img src={fact.thumbnail.source} alt="" style={{ width: 60, height: 60, borderRadius: '8px', objectFit: 'cover' }} />}
+          <div style={{ flex: 1 }}>
+            <blockquote className="fact-text" style={{ fontSize: '0.85rem', margin: 0 }}>"{fact.extract}"</blockquote>
+            {fact.content_urls && <a href={fact.content_urls.desktop.page} target="_blank" rel="noreferrer" style={{ fontSize: '0.7rem', color: 'var(--accent)', textDecoration: 'none', marginTop: '0.5rem', display: 'inline-block' }}>Lees meer op Wikipedia →</a>}
+          </div>
+        </div>
+      ) : (
+        <p className="auth-hint">Laden van lokale geschiedenis...</p>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────
+// Local Flavors (featuring Global Inspiration)
+// ─────────────────────────────────────────
+function LocalFlavors({ meal }: { meal: MealInspiration | null }) {
   return (
     <div className="glass-panel">
-      <div className="panel-header"><Utensils className="panel-icon" size={22} /><h2>Local Flavors</h2></div>
-      <div className="dishes-scroll-container">
-        {dishes.length === 0 && <p className="auth-hint">Gerechten worden geladen...</p>}
-        <div className="dishes-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '1rem' }}>
-          {dishes.map((d, i) => (
-            <div key={i} className={`dish-card ${d.cityId}`} style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '1rem', textAlign: 'center' }}>
-              <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>{d.image}</div>
-              <h4 style={{ fontSize: '0.9rem', marginBottom: '0.25rem' }}>{d.name}</h4>
-              <p style={{ fontSize: '0.75rem', opacity: 0.7, lineHeight: 1.3 }}>{d.description}</p>
-              <div style={{ marginTop: '0.5rem', fontSize: '0.75rem' }}>{d.flag} {d.cityId.toUpperCase()}</div>
-            </div>
-          ))}
+      <div className="panel-header"><Utensils className="panel-icon" size={22} /><h2>Global Food Inspiration</h2><span className="live-badge">TheMealDB API</span></div>
+      {meal ? (
+        <div className="meal-insp-card" style={{ display: 'flex', gap: '1.5rem', background: 'rgba(255,255,255,0.03)', borderRadius: '16px', padding: '1rem', overflow: 'hidden' }}>
+          <img src={meal.strMealThumb} alt={meal.strMeal} style={{ width: '120px', height: '120px', borderRadius: '12px', objectFit: 'cover' }} />
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            <h3 style={{ fontSize: '1.2rem', marginBottom: '0.5rem' }}>{meal.strMeal}</h3>
+            <p style={{ fontSize: '0.85rem', opacity: 0.7, marginBottom: '1rem' }}>Vandaag een culinair uitstapje! Wat dacht je van dit heerlijke gerecht?</p>
+            <a href={meal.strSource || '#'} target="_blank" rel="noreferrer" className="btn-auth" style={{ padding: '0.5rem 1rem', width: 'fit-content', fontSize: '0.8rem' }}>
+              <Utensils size={14} /> Bekijk Recept
+            </a>
+          </div>
         </div>
-      </div>
+      ) : (
+        <p className="auth-hint">Vandaag even geen inspiratie... (Laden)</p>
+      )}
     </div>
   );
 }
@@ -214,11 +255,11 @@ function LocalFlavors({ dishes }: { dishes: Dish[] }) {
 interface DashboardProps { 
   userName: string; 
   userCity: string;
+  userCityId: string;
   wotd: { lang: string; word: string; translation: string; useCase: string }[]; 
-  facts: { cityId: string; flag: string; city: string; fact: string }[];
-  dishes: Dish[];
+  autoCulture: ReturnType<typeof useAutomatedCulture>;
 }
-function DashboardTab({ userName, userCity, wotd, facts, dishes }: DashboardProps) {
+function DashboardTab({ userName, userCity, userCityId, wotd, autoCulture }: DashboardProps) {
   const { kudos, addKudo } = useKudos();
   const [showForm, setShowForm] = useState(false);
   const [newKudo, setNewKudo] = useState({ to: '', message: '' });
@@ -239,9 +280,10 @@ function DashboardTab({ userName, userCity, wotd, facts, dishes }: DashboardProp
   return (
     <div className="dashboard-grid">
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-        <CitiesHub />
+        <CitiesHub holidays={autoCulture.holidays} dayCycles={autoCulture.dayCycles} />
+        <SquadRadio radios={autoCulture.radios} />
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-          <CulturalFact facts={facts} />
+          <CulturalFact facts={autoCulture.facts} userCityId={userCityId} />
           <div className="glass-panel">
             <div className="panel-header"><MessageSquare className="panel-icon" size={22} /><h2>Phrase</h2></div>
             <div className="wotd-container" style={{ padding: '0.5rem' }}>
@@ -257,7 +299,7 @@ function DashboardTab({ userName, userCity, wotd, facts, dishes }: DashboardProp
             </div>
           </div>
         </div>
-        <LocalFlavors dishes={dishes} />
+        <LocalFlavors meal={autoCulture.meal} />
       </div>
       <div className="glass-panel kudos-panel">
         <div className="panel-header">
@@ -541,8 +583,9 @@ export default function App() {
     return saved ? JSON.parse(saved) as { name: string; city: string } : null;
   });
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
-  const { facts, wotd, icebreakers, dishes, seed } = useCultureData();
+  const { wotd, icebreakers, seed } = useCultureData();
   const { questions: quizQuestions } = useQuiz();
+  const autoCulture = useAutomatedCulture();
 
   const handleLogin = (name: string, city: string) => {
     const u = { name, city }; setUser(u);
@@ -613,7 +656,7 @@ export default function App() {
         <div className="user-profile"><span>{getCityFlag(cityId)}</span><div className={`avatar ${cityId}`}>{user.name[0]}</div><span style={{ fontSize: '0.9rem' }} className="user-name-label">{user.name}</span></div>
       </header>
       <main>
-        {activeTab === 'dashboard' && <DashboardTab userName={user.name} userCity={user.city} facts={facts} wotd={wotd} dishes={dishes} />}
+        {activeTab === 'dashboard' && <DashboardTab userName={user.name} userCity={user.city} userCityId={cityId} wotd={wotd} autoCulture={autoCulture} />}
         {activeTab === 'connect' && <ConnectTab userName={user.name} userCityId={cityId} icebreakers={icebreakers} onPostToWall={postToWall} />}
         {activeTab === 'wall' && <CultureWallTab userName={user.name} userCityId={cityId} />}
         {activeTab === 'polls' && <PollsTab userName={user.name} userCityId={cityId} />}
