@@ -65,20 +65,26 @@ export function GlobalChat({ userName }: { userName: string }) {
     }
   };
 
+  const isApiConnected = !!import.meta.env.VITE_GEMINI_API_KEY;
+
   return (
-    <div className="glass-panel chat-container" style={{ display: 'flex', flexDirection: 'column', height: '550px' }}>
-      <div className="panel-header">
-        <MessageSquare className="panel-icon" size={22} />
+    <div className="glass-panel chat-container" style={{ display: 'flex', flexDirection: 'column', height: '600px', padding: 0, overflow: 'hidden' }}>
+      <div className="panel-header" style={{ padding: '1.25rem', borderBottom: '1px solid rgba(255,255,255,0.05)', marginBottom: 0 }}>
+        <MessageSquare className="panel-icon" size={24} />
         <div style={{ flex: 1 }}>
-          <h2 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            {t('global_chat')} <span style={{ fontSize: '0.7rem', background: 'rgba(255,255,255,0.1)', padding: '2px 8px', borderRadius: '12px' }}>Atlas AI</span>
+          <h2 style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', margin: 0 }}>
+            {t('global_chat')} 
+            <span style={{ fontSize: '0.7rem', background: 'rgba(var(--accent-rgb), 0.1)', color: 'var(--accent)', padding: '2px 8px', borderRadius: '12px', fontWeight: 600 }}>Atlas v1.5</span>
           </h2>
-          <p style={{ fontSize: '0.7rem', opacity: 0.6 }}>Real-time squad connection</p>
+          <p style={{ fontSize: '0.75rem', opacity: 0.6, margin: '2px 0 0 0' }}>Real-time squad connection • 🌐🚀✨</p>
         </div>
-        <div className="api-badge"><Zap size={10} /> {t('smart_trans')}</div>
+        <div className="api-badge">
+          <span className={`status-dot ${isApiConnected ? 'online' : 'offline'}`}></span>
+          {isApiConnected ? 'Connected' : 'Offline Mode'}
+        </div>
       </div>
 
-      <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+      <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem', background: 'rgba(0,0,0,0.1)' }}>
         {messages.map((msg) => {
           const isMe = msg.author === userName;
           const isBot = msg.author === 'Dupo-Atlas';
@@ -86,19 +92,12 @@ export function GlobalChat({ userName }: { userName: string }) {
           const translatedText = msg.trans?.[displayLang] || msg.text;
 
           return (
-            <div key={msg.id} style={{ alignSelf: isMe ? 'flex-end' : 'flex-start', maxWidth: '80%', animation: 'fadeInUp 0.3s ease-out' }}>
-              <div style={{ fontSize: '0.65rem', opacity: 0.5, marginBottom: '2px', textAlign: isMe ? 'right' : 'left' }}>
-                {isBot ? '🤖 ' : ''}{msg.author} • {msg.lang}
+            <div key={msg.id} style={{ alignSelf: isMe ? 'flex-end' : 'flex-start', maxWidth: '85%', animation: 'fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1)' }}>
+              <div style={{ fontSize: '0.7rem', opacity: 0.5, marginBottom: '4px', textAlign: isMe ? 'right' : 'left', display: 'flex', alignItems: 'center', gap: '4px', justifyContent: isMe ? 'flex-end' : 'flex-start' }}>
+                {isBot && <Zap size={10} color="var(--accent)" />}
+                {isBot ? 'Atlas AI' : msg.author} • {msg.lang}
               </div>
-              <div style={{ 
-                background: isBot ? 'rgba(var(--accent-rgb), 0.2)' : isMe ? 'var(--accent)' : 'rgba(255,255,255,0.1)', 
-                border: isBot ? '1px solid var(--accent)' : 'none',
-                padding: '0.6rem 0.9rem', 
-                borderRadius: isMe ? '16px 16px 2px 16px' : '16px 16px 16px 2px',
-                fontSize: '0.9rem',
-                color: 'white',
-                boxShadow: isBot ? '0 0 15px rgba(var(--accent-rgb), 0.1)' : 'none'
-              }}>
+              <div className={`chat-bubble ${isMe ? 'me' : 'bot'}`}>
                 {translatedText}
               </div>
             </div>
@@ -106,33 +105,33 @@ export function GlobalChat({ userName }: { userName: string }) {
         })}
         {isBotThinking && (
           <div style={{ alignSelf: 'flex-start', maxWidth: '80%', animation: 'fadeInUp 0.3s ease-out' }}>
-            <div style={{ fontSize: '0.65rem', opacity: 0.5, marginBottom: '2px' }}>🤖 Dupo-Atlas is thinking...</div>
-            <div className="chat-bubble bot-bubble" style={{ padding: '0.6rem 0.9rem', borderRadius: '16px 16px 16px 2px', background: 'rgba(255, 255, 255, 0.1)', border: '1px solid var(--accent)' }}>
+            <div style={{ fontSize: '0.7rem', opacity: 0.5, marginBottom: '4px' }}>Atlas AI is thinking...</div>
+            <div className="chat-bubble bot" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <div className="typing-dots">
-                <span>.</span><span>.</span><span>.</span>
+                <span></span><span></span><span></span>
               </div>
             </div>
           </div>
         )}
       </div>
 
-      <div style={{ padding: '0.5rem 1rem', display: 'flex', gap: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.05)', flexWrap: 'wrap' }}>
-        <button className="btn-icon-sm" onClick={() => handleSend('/news')} style={{ fontSize: '0.65rem', padding: '4px 8px', width: 'auto' }}>📰 /news</button>
-        <button className="btn-icon-sm" onClick={() => handleSend('/fact')} style={{ fontSize: '0.65rem', padding: '4px 8px', width: 'auto' }}>📜 /fact</button>
-        <button className="btn-icon-sm" onClick={() => handleSend('/weather')} style={{ fontSize: '0.65rem', padding: '4px 8px', width: 'auto' }}>⛅ /weather</button>
+      <div style={{ padding: '0.75rem 1.25rem', display: 'flex', gap: '0.6rem', background: 'rgba(255,255,255,0.02)', borderTop: '1px solid rgba(255,255,255,0.05)', flexWrap: 'wrap' }}>
+        <button className="btn-icon-sm" onClick={() => handleSend('/news')} style={{ fontSize: '0.7rem', padding: '5px 10px', width: 'auto', background: 'rgba(255,255,255,0.05)' }}>📰 News</button>
+        <button className="btn-icon-sm" onClick={() => handleSend('/fact')} style={{ fontSize: '0.7rem', padding: '5px 10px', width: 'auto', background: 'rgba(255,255,255,0.05)' }}>📜 Fact</button>
+        <button className="btn-icon-sm" onClick={() => handleSend('/weather')} style={{ fontSize: '0.7rem', padding: '5px 10px', width: 'auto', background: 'rgba(255,255,255,0.05)' }}>⛅ Weather</button>
       </div>
 
-      <div style={{ padding: '1rem', paddingTop: '0.5rem', display: 'flex', gap: '0.5rem' }}>
+      <div style={{ padding: '1.25rem', paddingTop: '0.5rem', display: 'flex', gap: '0.75rem', background: 'rgba(255,255,255,0.03)' }}>
         <input 
           className="auth-input" 
           placeholder={t('type_message')} 
           value={text} 
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-          style={{ marginBottom: 0 }}
+          style={{ marginBottom: 0, height: '48px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)' }}
         />
-        <button className="btn-auth" onClick={() => handleSend()} disabled={sending} style={{ width: '50px', padding: 0 }}>
-          <Send size={18} />
+        <button className="btn-auth" onClick={() => handleSend()} disabled={sending || !text.trim()} style={{ width: '56px', height: '48px', padding: 0, borderRadius: '12px' }}>
+          {sending ? <div className="spinner-sm" style={{ width: '20px', height: '20px' }} /> : <Send size={20} />}
         </button>
       </div>
     </div>
