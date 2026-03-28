@@ -60,6 +60,19 @@ const DICTIONARY: Record<Lang, Record<string, string>> = {
     admin_fail: 'Admin login mislukt',
     seed_confirm: 'Dit voegt standaard data toe aan Firestore. Doorgaan?',
     db_filled: 'Database gevuld! Ververs de app.',
+    already_played: 'Je hebt vandaag al meegedaan!',
+    see_you_tomorrow: 'Kom morgen terug voor nieuwe vragen.',
+    view_leaderboard: 'Bekijk Scorebord',
+    lekker_bezig: 'Lekker bezig!',
+    ideas: 'Community Ideeën',
+    ideas_desc: 'What mis je nog in DUPOIND?',
+    new_idea: 'Nieuw Idee',
+    submit_idea: 'Insturen',
+    system_dashboard: 'Atlas Pulse',
+    living_brain: 'Living Brain Status',
+    normal: 'Normaal',
+    initializing: 'Initialiseren...',
+    maintenance: 'Onderhoud',
   },
   EN: {
     dashboard: 'Dashboard',
@@ -118,6 +131,19 @@ const DICTIONARY: Record<Lang, Record<string, string>> = {
     admin_fail: 'Admin login failed',
     seed_confirm: 'This will add default data to Firestore. Continue?',
     db_filled: 'Database filled! Refresh the app.',
+    already_played: "You've already played today!",
+    see_you_tomorrow: 'Come back tomorrow for new questions.',
+    view_leaderboard: 'View Leaderboard',
+    lekker_bezig: 'Doing great!',
+    ideas: 'Community Ideas',
+    ideas_desc: 'What else should we add?',
+    new_idea: 'New Idea',
+    submit_idea: 'Submit',
+    system_dashboard: 'Atlas Pulse',
+    living_brain: 'Living Brain Status',
+    normal: 'Normal',
+    initializing: 'Initializing...',
+    maintenance: 'Maintenance',
   },
   PT: {
     dashboard: 'Painel',
@@ -176,6 +202,19 @@ const DICTIONARY: Record<Lang, Record<string, string>> = {
     admin_fail: 'Falha no login admin',
     seed_confirm: 'Isso adicionará dados ao Firestore. Continuar?',
     db_filled: 'Banco de dados preenchido! Recarregue a app.',
+    already_played: 'Você já jogou hoje!',
+    see_you_tomorrow: 'Volte amanhã para novas perguntas.',
+    view_leaderboard: 'Ver Ranking',
+    lekker_bezig: 'Arrasou!',
+    ideas: 'Ideias da Comunidade',
+    ideas_desc: 'O que mais devemos adicionar?',
+    new_idea: 'Nova Ideia',
+    submit_idea: 'Enviar',
+    system_dashboard: 'Atlas Pulse',
+    living_brain: 'Status do Cérebro',
+    normal: 'Normal',
+    initializing: 'Iniciando...',
+    maintenance: 'Manutenção',
   },
   TA: {
     dashboard: 'டாஷ்போர்டு',
@@ -234,6 +273,19 @@ const DICTIONARY: Record<Lang, Record<string, string>> = {
     admin_fail: 'நிர்வாகி உள்நுழைவு தோல்வியுற்றது',
     seed_confirm: 'இது தரவைச் சேர்க்கும். தொடரவா?',
     db_filled: 'தரவுத்தளம் நிரப்பப்பட்டது! ஆப்-ஐ புதுப்பிக்கவும்.',
+    already_played: 'நீங்கள் இன்று ஏற்கனவே விளையாடிவிட்டீர்கள்!',
+    see_you_tomorrow: 'புதிய கேள்விகளுக்கு நாளை மீண்டும் வாருங்கள்.',
+    view_leaderboard: 'லீடர்போர்டைப் பார்',
+    lekker_bezig: 'மிகவும் நன்று!',
+    ideas: 'சமூக யோசனைகள்',
+    ideas_desc: 'நாம் வேறு என்ன சேர்க்கலாம்?',
+    new_idea: 'புதிய யோசனை',
+    submit_idea: 'சமர்ப்பி',
+    system_dashboard: 'அட்லஸ் துடிப்பு',
+    living_brain: 'மூளையின் நிலை',
+    normal: 'சாதாரணமானது',
+    initializing: 'துவங்குகிறது...',
+    maintenance: 'பராமரிப்பு',
   }
 };
 
@@ -252,8 +304,14 @@ export function useTranslation() {
     localStorage.setItem('dupoind_lang', lang);
   }, [lang]);
 
-  const t = useCallback((key: string) => {
-    return DICTIONARY[lang][key] || key;
+  const t = useCallback((key: string, params?: Record<string, any>) => {
+    let str = DICTIONARY[lang][key] || key;
+    if (params) {
+      Object.keys(params).forEach(p => {
+        str = str.replace(`{${p}}`, String(params[p]));
+      });
+    }
+    return str;
   }, [lang]);
 
   return { lang, setLang, t };

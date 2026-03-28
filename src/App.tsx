@@ -100,9 +100,9 @@ function AuthScreen({ onLogin, setLang, t, adminAuth }: {
     <div className={`auth-container ${shake ? 'shake' : ''}`}>
       <div className="auth-card glass-panel">
         <div className="auth-logo">
-          <div className="logo-icon-lg"><Globe color="white" size={32} /></div>
-          <h1>DUPO<span>IND</span></h1>
-          <p>Utrecht · Lisbon · Chennai</p>
+          <div className="logo-icon-large"><Globe color="white" size={40} /></div>
+          <h1 className="auth-title">DUPO<span>IND</span></h1>
+          <p className="auth-subtitle">Utrecht · Lisbon · Chennai</p>
         </div>
 
         {step === 'admin' ? (
@@ -731,26 +731,36 @@ export default function App() {
   };
 
   if (adminAuth.adminUser) return <AdminDashboard onSeed={handleSeed} onLogout={adminAuth.logout} codes={codes} />;
-  if (!user) return <AuthScreen onLogin={handleLogin} setLang={setLang} t={t} adminAuth={adminAuth} />;
-  const cityId = user.city.toLowerCase();
-
-  const postToWall = async (content: string, emoji: string) => {
-    const trans = await getFullTranslation(content);
-    const { addDoc, collection, serverTimestamp } = await import('firebase/firestore');
-    const { db: firestore } = await import('./firebase');
-    await addDoc(collection(firestore, 'wallPosts'), {
-      author: user.name, city: user.city, cityId, content, emoji, likes: [],
-      time: new Date().toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' }),
-      translations: trans, createdAt: serverTimestamp(),
-    });
-    setActiveTab('wall');
-  };
 
   return (
-    <div className="app-container">
-      <header>
-        <div className="logo-container"><div className="logo-icon"><Globe color="white" size={22} /></div><div className="logo-text">DUPO<span>IND</span></div></div>
-        <nav className="tab-nav">
+    <>
+      <div className="aurora-bg">
+        <div className="aurora-blob blob-1"></div>
+        <div className="aurora-blob blob-2"></div>
+        <div className="aurora-blob blob-3"></div>
+      </div>
+      
+      {!user ? (
+        <AuthScreen onLogin={handleLogin} setLang={setLang} t={t} adminAuth={adminAuth} />
+      ) : (() => {
+        const cityId = user.city.toLowerCase();
+        const postToWall = async (content: string, emoji: string) => {
+          const trans = await getFullTranslation(content);
+          const { addDoc, collection, serverTimestamp } = await import('firebase/firestore');
+          const { db: firestore } = await import('./firebase');
+          await addDoc(collection(firestore, 'wallPosts'), {
+            author: user.name, city: user.city, cityId, content, emoji, likes: [],
+            time: new Date().toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' }),
+            translations: trans, createdAt: serverTimestamp(),
+          });
+          setActiveTab('wall');
+        };
+
+        return (
+          <div className="app-container">
+          <header>
+            <div className="logo-container"><div className="logo-icon"><Globe color="white" size={22} /></div><div className="logo-text">DUPO<span>IND</span></div></div>
+            <nav className="tab-nav desktop-only">
           <button className={`tab-btn ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}><Home size={18} /> <span className="tab-label">{t('dashboard')}</span></button>
           <button className={`tab-btn ${activeTab === 'connect' ? 'active' : ''}`} onClick={() => setActiveTab('connect')}><Shuffle size={18} /> <span className="tab-label">{t('connect')}</span></button>
           <button className={`tab-btn ${activeTab === 'wall' ? 'active' : ''}`} onClick={() => setActiveTab('wall')}><LayoutGrid size={18} /> <span className="tab-label">{t('wall')}</span></button>
@@ -766,7 +776,22 @@ export default function App() {
             <option value="PT">🇵🇹 PT</option>
             <option value="TA">🇮🇳 TA</option>
           </select>
-          <div className="user-profile"><span>{getCityFlag(cityId)}</span><div className={`avatar ${cityId}`}>{user.name[0]}</div><span style={{ fontSize: '0.9rem' }} className="user-name-label">{user.name}</span></div>
+          <div className="user-profile">
+            <span>{getCityFlag(cityId)}</span>
+            {/* Premium Mood Glow Implementation */}
+            {(() => {
+              const myPresence = squad.find(s => s.name === user.name);
+              const moodGlow = myPresence?.mood === '🔥' ? 'glow-fire' : 
+                               myPresence?.mood === '😊' ? 'glow-gold' : 
+                               myPresence?.mood === '🫠' ? 'glow-chill' : '';
+              return (
+                <div className={`avatar ${cityId} ${moodGlow}`} title={myPresence?.mood || 'Vibe'}>
+                  {user.name[0]}
+                </div>
+              );
+            })()}
+            <span style={{ fontSize: '0.9rem' }} className="user-name-label">{user.name}</span>
+          </div>
         </div>
       </header>
       <main>
@@ -782,6 +807,32 @@ export default function App() {
           </div>
         )}
       </main>
-    </div>
+
+      <nav className="mobile-bottom-nav">
+        <button className={`nav-item-mobile ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>
+          <Home className="nav-icon" size={20} />
+          <span>Home</span>
+        </button>
+        <button className={`nav-item-mobile ${activeTab === 'connect' ? 'active' : ''}`} onClick={() => setActiveTab('connect')}>
+          <Shuffle className="nav-icon" size={20} />
+          <span>Connect</span>
+        </button>
+        <button className={`nav-item-mobile ${activeTab === 'wall' ? 'active' : ''}`} onClick={() => setActiveTab('wall')}>
+          <Camera className="nav-icon" size={20} />
+          <span>Wall</span>
+        </button>
+        <button className={`nav-item-mobile ${activeTab === 'chat' ? 'active' : ''}`} onClick={() => setActiveTab('chat')}>
+          <MessageSquare className="nav-icon" size={20} />
+          <span>Chat</span>
+        </button>
+        <button className={`nav-item-mobile ${activeTab === 'quiz' ? 'active' : ''}`} onClick={() => setActiveTab('quiz')}>
+          <Trophy className="nav-icon" size={20} />
+          <span>Quiz</span>
+        </button>
+      </nav>
+          </div>
+        );
+      })()}
+    </>
   );
 }

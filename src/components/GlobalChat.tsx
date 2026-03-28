@@ -2,12 +2,15 @@ import { useState, useRef, useEffect } from 'react';
 import { Send, MessageSquare, Zap } from 'lucide-react';
 import { useGlobalChat } from '../hooks/useFirestore';
 import { useTranslation } from '../hooks/useTranslation';
+import { getAssistantResponse } from '../services/aiService';
 
 export function GlobalChat({ userName }: { userName: string }) {
   const { messages, sendMsg } = useGlobalChat();
   const { lang: currentLang, t } = useTranslation();
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
+  const [isBotThinking, setIsBotThinking] = useState(false);
+  const isBotTyping = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -23,8 +26,8 @@ export function GlobalChat({ userName }: { userName: string }) {
     try {
       await sendMsg(userName, msgText, currentLang);
       
-      // Smart Assistant Logic (Dupo-Atlas)
-      if (msgText.startsWith('/') || msgText.toLowerCase().includes('dupo') || msgText.toLowerCase().includes('atlas')) {
+      // Real LLM Assistant Logic (Dupo-Atlas)
+      if (msgText.toLowerCase().includes('atlas') || msgText.startsWith('/') || text.length > 5) {
         await handleAssistantResponse(msgText);
       }
 
@@ -35,25 +38,31 @@ export function GlobalChat({ userName }: { userName: string }) {
   };
 
   const handleAssistantResponse = async (query: string) => {
-    let response = "";
-    const lowerQuery = query.toLowerCase();
+    if (isBotTyping.current) return;
+    isBotTyping.current = true;
+    setIsBotThinking(true);
 
-    if (lowerQuery.startsWith('/news')) {
-      response = "🔍 Dupo-Atlas here! I'm checking the latest headlines for Utrecht, Lisbon, and Chennai... 📰 Check the Culture Wall for a fresh Spotlight post!";
-    } else if (lowerQuery.startsWith('/fact')) {
-      response = "📜 Did you know? Utrecht's cathedral tower (Domtoren) is the tallest in the Netherlands! ⛪";
-    } else if (lowerQuery.startsWith('/weather')) {
-      response = "⛅ The weather? In Lisbon it's perfect for a stroll in Alfama, while in Chennai it's warm and vibrant! Check the Hubs tab for live temps!";
-    } else if (lowerQuery.includes('hello') || lowerQuery.includes('hallo') || lowerQuery.includes('hi')) {
-      response = `👋 Hello ${userName}! I'm Dupo-Atlas, your Cultural Guide. How can I help you connect today?`;
-    } else {
-      response = "🧠 I'm Dupo-Atlas! Try typing /news, /fact, or /weather to see what's happening globally!";
+    try {
+      const response = await getAssistantResponse(query);
+      
+      if (response) {
+        // Natural delay for "human" feel
+        setTimeout(async () => {
+          await sendMsg('Dupo-Atlas', response, currentLang);
+          setIsBotThinking(false);
+          isBotTyping.current = false;
+        }, 1000);
+      } else {
+        // Fallback for missing API Key or error
+        const fallback = "🧠 I'm Dupo-Atlas! I'm currently in 'Offline Mode' (missing API Key), but I still know everything about Utrecht, Lisbon, and Chennai!";
+        await sendMsg('Dupo-Atlas', fallback, currentLang);
+        setIsBotThinking(false);
+        isBotTyping.current = false;
+      }
+    } catch {
+      setIsBotThinking(false);
+      isBotTyping.current = false;
     }
-
-    // Delay response slightly for natural feel
-    setTimeout(async () => {
-      await sendMsg('Dupo-Atlas', response, 'EN');
-    }, 1500);
   };
 
   return (
@@ -77,7 +86,7 @@ export function GlobalChat({ userName }: { userName: string }) {
           const translatedText = msg.trans?.[displayLang] || msg.text;
 
           return (
-            <div key={msg.id} style={{ alignSelf: isMe ? 'flex-end' : 'flex-start', maxWidth: '80%' }}>
+            <div key={msg.id} style={{ alignSelf: isMe ? 'flex-end' : 'flex-start', maxWidth: '80%', animation: 'fadeInUp 0.3s ease-out' }}>
               <div style={{ fontSize: '0.65rem', opacity: 0.5, marginBottom: '2px', textAlign: isMe ? 'right' : 'left' }}>
                 {isBot ? '🤖 ' : ''}{msg.author} • {msg.lang}
               </div>
@@ -87,13 +96,24 @@ export function GlobalChat({ userName }: { userName: string }) {
                 padding: '0.6rem 0.9rem', 
                 borderRadius: isMe ? '16px 16px 2px 16px' : '16px 16px 16px 2px',
                 fontSize: '0.9rem',
-                color: 'white'
+                color: 'white',
+                boxShadow: isBot ? '0 0 15px rgba(var(--accent-rgb), 0.1)' : 'none'
               }}>
                 {translatedText}
               </div>
             </div>
           );
         })}
+        {isBotThinking && (
+          <div style={{ alignSelf: 'flex-start', maxWidth: '80%', animation: 'fadeInUp 0.3s ease-out' }}>
+            <div style={{ fontSize: '0.65rem', opacity: 0.5, marginBottom: '2px' }}>🤖 Dupo-Atlas is thinking...</div>
+            <div className="chat-bubble bot-bubble" style={{ padding: '0.6rem 0.9rem', borderRadius: '16px 16px 16px 2px', background: 'rgba(255, 255, 255, 0.1)', border: '1px solid var(--accent)' }}>
+              <div className="typing-dots">
+                <span>.</span><span>.</span><span>.</span>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <div style={{ padding: '0.5rem 1rem', display: 'flex', gap: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.05)', flexWrap: 'wrap' }}>

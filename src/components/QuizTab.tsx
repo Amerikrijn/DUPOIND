@@ -1,8 +1,15 @@
 import { useState, useMemo } from 'react';
-import { Trophy, Check, X, Star } from 'lucide-react';
+import { Trophy, Check, X, Star, Lock } from 'lucide-react';
 import { useQuizScores } from '../hooks/useFirestore';
 import { useTranslation } from '../hooks/useTranslation';
 import type { QuizQuestion } from '../types';
+
+interface ScoreEntry {
+  name: string;
+  score: number;
+  cityId: string;
+  createdAt?: { seconds: number; nanoseconds: number };
+}
 
 export function QuizTab({ questions, userName, userCityId }: { questions: QuizQuestion[]; userName: string; userCityId: string }) {
   const { scores, saveScore } = useQuizScores();
@@ -43,8 +50,24 @@ export function QuizTab({ questions, userName, userCityId }: { questions: QuizQu
     } else {
       setFinished(true);
       await saveScore(userName, userCityId, score);
+      const today = new Date().toISOString().split('T')[0];
+      localStorage.setItem(`dupoind_quiz_${userName}_${today}`, 'true');
     }
   };
+
+  const hasPlayedToday = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0];
+    const localKey = `dupoind_quiz_${userName}_${today}`;
+    if (localStorage.getItem(localKey)) return true;
+    
+    // Also check Firestore scores for today
+    return (scores as ScoreEntry[]).some(s => {
+      const sDate = s.createdAt?.seconds 
+        ? new Date(s.createdAt.seconds * 1000).toISOString().split('T')[0]
+        : new Date().toISOString().split('T')[0]; 
+      return s.name === userName && sDate === today;
+    });
+  }, [scores, userName]);
 
   if (qIdx === -1) {
     return (
@@ -70,7 +93,15 @@ export function QuizTab({ questions, userName, userCityId }: { questions: QuizQu
             </div>
           </div>
 
-          <button className="btn-auth" onClick={() => setQIdx(0)}>{t('start_quiz')}</button>
+          {hasPlayedToday ? (
+            <div style={{ padding: '1rem', background: 'rgba(244,63,94,0.1)', borderRadius: '12px', border: '1px solid rgba(244,63,94,0.3)', color: 'var(--accent)' }}>
+              <Lock size={20} style={{ marginBottom: '0.5rem' }} />
+              <p style={{ fontWeight: 600 }}>{t('already_played')}</p>
+              <p style={{ fontSize: '0.8rem', opacity: 0.8 }}>{t('come_back_tomorrow')}</p>
+            </div>
+          ) : (
+            <button className="btn-auth" onClick={() => setQIdx(0)}>{t('start_quiz')}</button>
+          )}
         </div>
       </div>
     );
