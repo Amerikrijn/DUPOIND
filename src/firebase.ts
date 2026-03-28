@@ -1,10 +1,9 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
 
 // ──────────────────────────────────────────────────────
 // 👉 STAP 1: Maak een gratis project op console.firebase.google.com
-// 👉 STAP 2: Ga naar Project Settings > Your apps > Add app (Web)
-// 👉 STAP 3: Kopieer de firebaseConfig en plak het hier
 // ──────────────────────────────────────────────────────
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "JOUW_API_KEY",
@@ -17,3 +16,4 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
+export const auth = getAuth(app);

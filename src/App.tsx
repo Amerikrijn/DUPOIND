@@ -13,6 +13,7 @@ import type { Holiday, DayCycle, CityFact, MealInspiration, RadioStation } from 
 import { useLocation } from './hooks/useLocation';
 import { useTranslation } from './hooks/useTranslation';
 import type { Lang } from './hooks/useTranslation';
+import { useAdminAuth } from './hooks/useAdminAuth';
 import { getFullTranslation } from './utils/translate';
 import type { UserStatus, Dish } from './types';
 import { QUIZ_QUESTIONS, INITIAL_POLLS } from './data';
@@ -39,17 +40,23 @@ function getCityName(cityId: string) { return CITIES.find(c => c.id === cityId)?
 // ─────────────────────────────────────────
 // Auth Screen
 // ─────────────────────────────────────────
-function AuthScreen({ onLogin, t }: { onLogin: (name: string, city: string) => void, t: (k: string) => string }) {
-  const { codes, addCode, removeCode, loading: codesLoading } = useSquadCodes();
-  const { detectedCity, loading: locLoading } = useLocation();
+function AuthScreen({ onLogin, t, adminAuth }: { 
+  onLogin: (name: string, city: string) => void, 
+  t: (k: string) => string,
+  adminAuth: ReturnType<typeof useAdminAuth>
+}) {
+  const { codes, loading: codesLoading } = useSquadCodes();
+  const { detectedCity } = useLocation();
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
   const [city, setCity] = useState('Utrecht');
-  const [step, setStep] = useState<'code' | 'profile'>('code');
+  const [step, setStep] = useState<'code' | 'profile' | 'admin'>('code');
   const [error, setError] = useState('');
   const [shake, setShake] = useState(false);
-  const [showAdmin, setShowAdmin] = useState(false);
-  const [newAdminCode, setNewAdminCode] = useState('');
+  
+  // Admin fields
+  const [adminEmail, setAdminEmail] = useState('');
+  const [adminPass, setAdminPass] = useState('');
 
   // Use a ref to only auto-set city once per session
   const locSet = useRef(false);
@@ -63,50 +70,46 @@ function AuthScreen({ onLogin, t }: { onLogin: (name: string, city: string) => v
   const checkCode = () => {
     const input = code.trim().toUpperCase();
     if (codes.includes(input)) { 
-      setStep('profile'); 
-      setError(''); 
-    } else if (codes.length === 0 && !codesLoading) {
-      setError('Geen codes in database. Gebruik de Seed tool.');
-      setShake(true);
-    } else { 
-      setError('Ongeldige code. Vraag je team lead.'); 
-      setShake(true); 
-      setTimeout(() => setShake(false), 500); 
+      setStep('profile');
+      setError('');
+    } else {
+      setError('Ongeldige code. Vraag je team lead.');
+      setShake(true); setTimeout(() => setShake(false), 500);
     }
   };
 
-  const handleAddCode = async () => {
-    if (!newAdminCode.trim()) return;
-    await addCode(newAdminCode);
-    setNewAdminCode('');
+  const handleAdminLogin = async () => {
+    try {
+      setError('');
+      await adminAuth.login(adminEmail, adminPass);
+    } catch (e: any) {
+      setError('Admin login mislukt: ' + e.message);
+    }
   };
 
   return (
-    <div className="auth-container">
-      <div className={`auth-card ${shake ? 'shake' : ''}`}>
-        <div className="auth-logo" onClick={() => setShowAdmin(!showAdmin)} style={{ cursor: 'pointer' }}>
-          <div className="logo-icon-large"><Globe size={32} color="white" /></div>
-          <h1 className="auth-title">DUPO<span>IND</span></h1>
-          <p className="auth-subtitle">Utrecht · Lisbon · Chennai</p>
+    <div className={`auth-container ${shake ? 'shake' : ''}`}>
+      <div className="auth-card glass-panel">
+        <div className="auth-logo">
+          <div className="logo-icon-lg"><Globe color="white" size={32} /></div>
+          <h1>DUPO<span>IND</span></h1>
+          <p>Utrecht · Lisbon · Chennai</p>
         </div>
 
-        {showAdmin ? (
-          <div className="auth-form admin-panel">
-            <h3 style={{ marginBottom: '1rem', color: 'var(--accent)' }}>SQUAD CODE BEHEER</h3>
-            <div className="admin-list" style={{ maxHeight: '150px', overflowY: 'auto', marginBottom: '1rem' }}>
-              {codes.map(c => (
-                <div key={c} className="admin-item" style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', marginBottom: '0.5rem' }}>
-                  <span>{c}</span>
-                  <button onClick={() => removeCode(c)} className="btn-icon-sm" style={{ color: 'var(--error)' }}><Trash2 size={14} /></button>
-                </div>
-              ))}
-              {codes.length === 0 && <p className="auth-hint">Geen codes. Voeg er een toe!</p>}
+        {step === 'admin' ? (
+          <div className="auth-form">
+            <h2 style={{ textAlign: 'center', marginBottom: '1.5rem', fontSize: '1rem' }}>Admin Access</h2>
+            <div className="auth-field">
+              <label>Email</label>
+              <input className="auth-input" type="email" value={adminEmail} onChange={e => setAdminEmail(e.target.value)} />
             </div>
             <div className="auth-field">
-              <input className="auth-input" type="text" placeholder="Nieuwe code..." value={newAdminCode} onChange={e => setNewAdminCode(e.target.value)} />
-              <button className="btn-auth" style={{ marginTop: '0.5rem' }} onClick={handleAddCode}><Plus size={16} /> Toevoegen</button>
+              <label>Password</label>
+              <input className="auth-input" type="password" value={adminPass} onChange={e => setAdminPass(e.target.value)} />
             </div>
-            <button className="btn-icon-sm" onClick={() => setShowAdmin(false)} style={{ marginTop: '1rem', width: '100%' }}>Sluiten</button>
+            {error && <p className="auth-error">{error}</p>}
+            <button className="btn-auth" onClick={handleAdminLogin}>Admin Login</button>
+            <button className="btn-text" onClick={() => setStep('code')} style={{ marginTop: '1rem', width: '100%', fontSize: '0.8rem', opacity: 0.6 }}>Terug naar Squad Login</button>
           </div>
         ) : step === 'code' ? (
           <div className="auth-form">
@@ -114,27 +117,19 @@ function AuthScreen({ onLogin, t }: { onLogin: (name: string, city: string) => v
               <label><Lock size={14} /> {t('squad_code')}</label>
               <input className="auth-input" type="text" placeholder="bijv. DUPOIND" value={code}
                 onChange={e => setCode(e.target.value)} onKeyDown={e => e.key === 'Enter' && checkCode()} />
-              {error && (
-                <div style={{ marginTop: '0.5rem' }}>
-                  <p className="auth-error">{error}</p>
-                  {codes.length === 0 && (
-                    <button className="btn-auth" style={{ marginTop: '1rem', background: 'var(--accent)' }} onClick={() => (window as any).triggerSeed()}>
-                      🚀 Seed Database Nu
-                    </button>
-                  )}
-                </div>
-              )}
+              {error && <p className="auth-error">{error}</p>}
             </div>
             <p className="auth-hint">Geen wachtwoord of email nodig.<br />💡 Vraag je team lead om de code.</p>
             <button className="btn-auth" onClick={checkCode} disabled={codesLoading}>
               {codesLoading ? t('loading') : t('continue')} <ArrowRight size={18} />
             </button>
+            <button className="btn-text" onClick={() => setStep('admin')} style={{ marginTop: '1.5rem', width: '100%', fontSize: '0.7rem', opacity: 0.4 }}>Beheerder? Klik hier</button>
           </div>
         ) : (
           <div className="auth-form">
             <div className="auth-field"><label>{t('name')}</label>
               <input className="auth-input" type="text" placeholder="bijv. Martijn" value={name} onChange={e => setName(e.target.value)} /></div>
-            <div className="auth-field"><label>{t('location')} {locLoading && '⏳'}</label>
+            <div className="auth-field"><label>{t('location')}</label>
               <select className="auth-input auth-select" value={city} onChange={e => setCity(e.target.value)}>
                 <option>Utrecht</option><option>Lisbon</option><option>Chennai</option>
               </select></div>
@@ -143,6 +138,47 @@ function AuthScreen({ onLogin, t }: { onLogin: (name: string, city: string) => v
             </button>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────
+// Admin Dashboard
+// ─────────────────────────────────────────
+function AdminDashboard({ onSeed, onLogout, codes }: { onSeed: () => void, onLogout: () => void, codes: string[] }) {
+  const [newCode, setNewCode] = useState('');
+  const { addCode, removeCode } = useSquadCodes();
+
+  return (
+    <div className="app-container" style={{ padding: '2rem', maxWidth: '800px', margin: '0 auto' }}>
+      <div className="glass-panel" style={{ padding: '2rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+          <h2>🛡️ Admin Dashboard</h2>
+          <button className="btn-auth" style={{ background: 'rgba(255,255,255,0.1)', padding: '0.5rem 1rem' }} onClick={onLogout}>Logout</button>
+        </div>
+
+        <div style={{ marginBottom: '2.5rem', background: 'rgba(255,255,255,0.03)', padding: '1.5rem', borderRadius: '16px' }}>
+          <h3>🚀 Database Initialization</h3>
+          <p style={{ fontSize: '0.85rem', opacity: 0.7, marginBottom: '1rem' }}>Gebruik dit alleen voor een nieuwe installatie om de basis-data te vullen.</p>
+          <button className="btn-auth" style={{ background: 'var(--accent)' }} onClick={onSeed}>Seed Database Now</button>
+        </div>
+
+        <div>
+          <h3>🔑 Manage Squad Codes</h3>
+          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+            <input className="auth-input" value={newCode} onChange={e => setNewCode(e.target.value)} placeholder="New code..." />
+            <button className="btn-auth" style={{ width: 'auto' }} onClick={() => { if(newCode) { addCode(newCode.toUpperCase()); setNewCode(''); } }}>Add</button>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '0.5rem' }}>
+            {codes.map(c => (
+              <div key={c} style={{ background: 'rgba(255,255,255,0.05)', padding: '0.5rem 1rem', borderRadius: '8px', display: 'flex', justifyContent: 'space-between' }}>
+                <span>{c}</span>
+                <button onClick={() => removeCode(c)} style={{ border: 'none', background: 'none', color: '#ff4b4b', cursor: 'pointer' }}>×</button>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -588,17 +624,6 @@ function CultureWallTab({ userName, userCityId, t }: { userName: string; userCit
 }
 
 // ─────────────────────────────────────────
-// Seed Button (Helper)
-// ─────────────────────────────────────────
-function SeedHelper({ onSeed }: { onSeed: () => void }) {
-  return (
-    <div style={{ padding: '0.5rem', opacity: 0.3, position: 'fixed', bottom: 0, right: 0 }}>
-      <button className="btn-icon-sm" onClick={onSeed} title="Seed database met initiële data"><Database size={12} /></button>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────
 // Main App
 // ─────────────────────────────────────────
 export default function App() {
@@ -607,10 +632,12 @@ export default function App() {
     return saved ? JSON.parse(saved) as { name: string; city: string } : null;
   });
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
-  const { wotd, icebreakers, seed } = useCultureData();
+  const { codes, seed } = useSquadCodes();
   const { questions: quizQuestions } = useQuiz();
+  const { facts, wotd, icebreakers } = useCultureData();
   const autoCulture = useAutomatedCulture();
   const { lang, setLang, t } = useTranslation();
+  const adminAuth = useAdminAuth();
 
   const handleLogin = (name: string, city: string) => {
     const u = { name, city }; setUser(u);
@@ -652,12 +679,8 @@ export default function App() {
     alert('Database gevuld! Ververs de app.');
   };
 
-  // Expose seed for the prominent auth button
-  useEffect(() => { 
-    (window as any).triggerSeed = handleSeed; 
-  }, [handleSeed]);
-
-  if (!user) return <AuthScreen onLogin={handleLogin} t={t} />;
+  if (adminAuth.adminUser) return <AdminDashboard onSeed={handleSeed} onLogout={adminAuth.logout} codes={codes} />;
+  if (!user) return <AuthScreen onLogin={handleLogin} t={t} adminAuth={adminAuth} />;
   const cityId = user.city.toLowerCase();
 
   const postToWall = async (content: string, emoji: string) => {
@@ -700,7 +723,6 @@ export default function App() {
         {activeTab === 'polls' && <PollsTab userName={user.name} userCityId={cityId} />}
         {activeTab === 'quiz' && <QuizTab questions={quizQuestions} />}
       </main>
-      <SeedHelper onSeed={handleSeed} />
     </div>
   );
 }
