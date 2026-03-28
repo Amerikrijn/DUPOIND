@@ -48,83 +48,95 @@ export function useAutomatedCulture() {
 
   useEffect(() => {
     async function fetchData() {
-      // 1. Holidays (Next public holiday for each country)
-      Object.entries(CITY_DETAILS).forEach(async ([city, details]) => {
+      // 1-4. Parallel fetch for all cities
+      const fetchPromises = Object.entries(CITY_DETAILS).map(async ([city, details]) => {
+        // --- Holidays ---
         try {
           const res = await fetch(`https://date.nager.at/api/v3/NextPublicHolidays/${details.countryCode}`);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
           const data = await res.json();
-          if (data && data.length > 0) {
+          if (data && Array.isArray(data) && data.length > 0) {
             setHolidays(prev => ({ ...prev, [city]: data[0] }));
           }
-        } catch (e) { console.error(`Holiday fetch failed for ${city}`, e); }
-      });
+        } catch (e) { 
+          console.warn(`Holidays: Skipping ${city} due to fetch error.`, e); 
+          setHolidays(prev => ({ ...prev, [city]: null }));
+        }
 
-      // 2. City Facts (Wikipedia Summary)
-      Object.entries(CITY_DETAILS).forEach(async ([city]) => {
+        // --- Facts ---
         try {
-          // Capitalize first letter for Wikipedia
           const name = city.charAt(0).toUpperCase() + city.slice(1);
           const res = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${name}`);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
           const data = await res.json();
           setFacts(prev => ({ ...prev, [city]: data }));
-        } catch (e) { console.error(`Fact fetch failed for ${city}`, e); }
-      });
+        } catch (e) { 
+          console.warn(`Facts: Skipping ${city} fetch.`, e);
+          setFacts(prev => ({ ...prev, [city]: null }));
+        }
 
-      // 3. Day Cycles (Sunrise/Sunset)
-      Object.entries(CITY_DETAILS).forEach(async ([city, details]) => {
+        // --- Day Cycle ---
         try {
           const res = await fetch(`https://api.sunrise-sunset.org/json?lat=${details.lat}&lng=${details.lng}&formatted=0`);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
           const { results } = await res.json();
-          const now = new Date();
-          const sunrise = new Date(results.sunrise);
-          const sunset = new Date(results.sunset);
-          
-          let status: 'day' | 'night' | 'twilight' = 'day';
-          if (now < sunrise || now > sunset) status = 'night';
-          else if (now.getTime() - sunrise.getTime() < 3600000 || sunset.getTime() - now.getTime() < 3600000) status = 'twilight';
+          if (results) {
+            const now = new Date();
+            const sunrise = new Date(results.sunrise);
+            const sunset = new Date(results.sunset);
+            
+            let status: 'day' | 'night' | 'twilight' = 'day';
+            if (now < sunrise || now > sunset) status = 'night';
+            else if (now.getTime() - sunrise.getTime() < 3600000 || sunset.getTime() - now.getTime() < 3600000) status = 'twilight';
 
-          setDayCycles(prev => ({ 
-            ...prev, 
-            [city]: { 
-              sunrise: sunrise.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' }), 
-              sunset: sunset.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' }),
-              status 
-            } 
-          }));
-        } catch (e) { console.error(`Day cycle fetch failed for ${city}`, e); }
-      });
+            setDayCycles(prev => ({ 
+              ...prev, 
+              [city]: { 
+                sunrise: sunrise.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' }), 
+                sunset: sunset.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' }),
+                status 
+              } 
+            }));
+          }
+        } catch (e) { 
+          console.warn(`DayCycle: Skipping ${city} fetch.`, e);
+          setDayCycles(prev => ({ ...prev, [city]: null }));
+        }
 
-      // 4. Radio Stations (Top-rated per country)
-      Object.entries(CITY_DETAILS).forEach(async ([city, details]) => {
+        // --- Radio ---
         try {
           const res = await fetch(`https://de1.api.radio-browser.info/json/stations/bycountry/${details.country}?limit=5&order=clickcount&reverse=true`);
-          const data = await res.json() as { name: string; url_resolved: string; favicon: string }[];
-          if (data && data.length > 0) {
-            // Pick first one with a favicon if possible
-            const station = data.find((s) => s.favicon) || data[0];
-            setRadios(prev => ({ ...prev, [city]: { name: station.name, url: station.url_resolved, favicon: station.favicon } }));
+          if (res.ok) {
+            const data = await res.json();
+            if (data && data.length > 0) {
+              const station = data.find((s: any) => s.favicon) || data[0];
+              setRadios(prev => ({ ...prev, [city]: { name: station.name, url: station.url_resolved, favicon: station.favicon } }));
+            }
           }
-        } catch (e) { console.error(`Radio fetch failed for ${city}`, e); }
+        } catch (e) { console.warn(`Radio: Skipping ${city} fetch.`, e); }
       });
 
       // 5. Daily Meal Inspiration (Filtered for Squad locations)
-      try {
-        const areas = ['Dutch', 'Portuguese', 'Indian'];
-        const randomArea = areas[Math.floor(Math.random() * areas.length)];
-        const filterRes = await fetch(`https://www.themealdb.com/api/json/v1/1/filter.php?a=${randomArea}`);
-        const filterData = await filterRes.json();
-        
-        if (filterData.meals && filterData.meals.length > 0) {
-          const randomMeal = filterData.meals[Math.floor(Math.random() * filterData.meals.length)];
-          // Fetch full details for the selected meal
-          const mealRes = await fetch(`https://www.themealdb.com/api/json/v1/1/lookup.php?i=${randomMeal.idMeal}`);
-          const mealData = await mealRes.json();
-          if (mealData.meals && mealData.meals.length > 0) {
-            setMeal(mealData.meals[0]);
+      const fetchMeal = async () => {
+        try {
+          const areas = ['Dutch', 'Portuguese', 'Indian'];
+          const randomArea = areas[Math.floor(Math.random() * areas.length)];
+          const filterRes = await fetch(`https://www.themealdb.com/api/json/v1/1/filter.php?a=${randomArea}`);
+          if (filterRes.ok) {
+            const filterData = await filterRes.json();
+            if (filterData.meals && filterData.meals.length > 0) {
+              const randomMeal = filterData.meals[Math.floor(Math.random() * filterData.meals.length)];
+              const mealRes = await fetch(`https://www.themealdb.com/api/json/v1/1/lookup.php?i=${randomMeal.idMeal}`);
+              const mealData = await mealRes.json();
+              if (mealData.meals && mealData.meals.length > 0) {
+                setMeal(mealData.meals[0]);
+              }
+            }
           }
-        }
-      } catch (e) { console.error('Meal fetch failed', e); }
+        } catch (e) { console.warn('Meal: Skipping fetch.', e); }
+      };
 
+      await Promise.all([...fetchPromises, fetchMeal()]);
       setLoading(false);
     }
 
