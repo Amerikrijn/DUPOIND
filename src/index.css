@@ -833,6 +833,12 @@ header {
   overflow-x: auto;
   scrollbar-width: none;
 }
+
+@media (min-width: 1025px) {
+  .mobile-bottom-nav {
+    display: none !important;
+  }
+}
 .mobile-bottom-nav::-webkit-scrollbar { display: none; }
 
 
