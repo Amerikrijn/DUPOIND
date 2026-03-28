@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Globe, Heart, MessageSquare, Send,
   Shuffle, Camera, Home, LayoutGrid, Lock, ArrowRight, X, Check,
@@ -653,7 +653,9 @@ export default function App() {
   };
 
   // Expose seed for the prominent auth button
-  useEffect(() => { (window as any).triggerSeed = handleSeed; }, []);
+  useEffect(() => { 
+    (window as any).triggerSeed = handleSeed; 
+  }, [handleSeed]);
 
   if (!user) return <AuthScreen onLogin={handleLogin} t={t} />;
   const cityId = user.city.toLowerCase();
