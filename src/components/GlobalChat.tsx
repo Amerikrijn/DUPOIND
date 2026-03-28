@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, MessageSquare, Zap } from 'lucide-react';
+import { Send, Zap } from 'lucide-react';
 import { useGlobalChat } from '../hooks/useFirestore';
 import { useTranslation } from '../hooks/useTranslation';
 import { getAssistantResponse } from '../services/aiService';
@@ -70,17 +70,16 @@ export function GlobalChat({ userName }: { userName: string }) {
   return (
     <div className="glass-panel chat-container" style={{ display: 'flex', flexDirection: 'column', height: '600px', padding: 0, overflow: 'hidden' }}>
       <div className="panel-header" style={{ padding: '1.25rem', borderBottom: '1px solid rgba(255,255,255,0.05)', marginBottom: 0 }}>
-        <MessageSquare className="panel-icon" size={24} />
+        <Zap className="panel-icon" size={24} color="var(--accent)" />
         <div style={{ flex: 1 }}>
           <h2 style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', margin: 0 }}>
-            {t('global_chat')} 
-            <span style={{ fontSize: '0.7rem', background: 'rgba(var(--accent-rgb), 0.1)', color: 'var(--accent)', padding: '2px 8px', borderRadius: '12px', fontWeight: 600 }}>Atlas v1.5</span>
+            Dupo-Atlas <span className="live-badge">Live Chat</span>
           </h2>
-          <p style={{ fontSize: '0.75rem', opacity: 0.6, margin: '2px 0 0 0' }}>Real-time squad connection • 🌐🚀✨</p>
+          <p style={{ fontSize: '0.75rem', opacity: 0.6, margin: '2px 0 0 0' }}>{t('real_time_connection')} • 🌐🚀✨</p>
         </div>
-        <div className="api-badge">
+        <div className="api-badge" title={isApiConnected ? "Gemini AI Connected" : "AI Offline - Check API Key"}>
           <span className={`status-dot ${isApiConnected ? 'online' : 'offline'}`}></span>
-          {isApiConnected ? 'Connected' : 'Offline Mode'}
+          <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>{isApiConnected ? 'Connected' : 'Offline'}</span>
         </div>
       </div>
 

@@ -27,34 +27,35 @@ export async function getAssistantResponse(userMsg: string): Promise<string | nu
   try {
     const genAI = new GoogleGenerativeAI(API_KEY);
     
-    // Attempt 1: Gemini 1.5 Flash (Latest)
-    let model;
-    try {
-      model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
-    } catch {
-      // Attempt 2: Pro fallback
-      model = genAI.getGenerativeModel({ model: "gemini-pro" });
-    }
-    
-    const result = await model.generateContent([
-      SYSTEM_PROMPT,
-      `User says: ${userMsg}`
-    ]);
-    
-    const response = await result.response;
-    const text = response.text();
-    if (!text) throw new Error("Empty response from Gemini");
+    // Function to try a specific model
+    const tryModel = async (modelName: string) => {
+      try {
+        const model = genAI.getGenerativeModel({ model: modelName });
+        const result = await model.generateContent([
+          SYSTEM_PROMPT,
+          `User says: ${userMsg}`
+        ]);
+        const response = await result.response;
+        return response.text();
+      } catch (e: any) {
+        console.warn(`Dupo-Atlas: ${modelName} failed`, e.message || e);
+        return null;
+      }
+    };
+
+    // Attempt models in order
+    let text = await tryModel("gemini-1.5-flash");
+    if (!text) text = await tryModel("gemini-pro");
+    if (!text) text = await tryModel("gemini-1.5-flash-latest");
+
+    if (!text) throw new Error("All models failed (404/Quota/Auth)");
     return text;
   } catch (err: unknown) {
     if (err instanceof Error) {
-      console.error("Dupo-Atlas Gemini SDK Error:", err.message);
-      
-      // If we got a 404, maybe try one more specific legacy model or log clearly
-      if (err.message.includes("404") || err.message.includes("not found")) {
-        console.warn("Dupo-Atlas: Model not found. This key might only have access to specific models. Telling user to check GCP console.");
+      console.error("Dupo-Atlas AI Error:", err.message);
+      if (err.message.includes("404")) {
+        console.error("Dupo-Atlas: Model not found. Check if the 'Generative Language API' is enabled for this project.");
       }
-    } else {
-      console.error("Dupo-Atlas Unknown Error:", err);
     }
     return null;
   }
