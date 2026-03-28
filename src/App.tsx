@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Globe, Heart, MessageSquare, Send,
   Shuffle, Camera, Home, LayoutGrid, Lock, ArrowRight, X, Check,
-  Lightbulb, Image, BarChart2, Zap, Trophy, Database, Trash2, Plus, Utensils
+  Lightbulb, Image, BarChart2, Zap, Trophy, Utensils
 } from 'lucide-react';
 import './index.css';
 
