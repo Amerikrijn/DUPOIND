@@ -3,15 +3,16 @@ import { getFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 
 // ──────────────────────────────────────────────────────
-// 👉 STAP 1: Maak een gratis project op console.firebase.google.com
+// 👉 GEKOPPELD AAN: culture-app-88cbd
 // ──────────────────────────────────────────────────────
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "JOUW_API_KEY",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "JOUW_PROJECT.firebaseapp.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "JOUW_PROJECT_ID",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "JOUW_PROJECT.appspot.com",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "JOUW_SENDER_ID",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "JOUW_APP_ID",
+  apiKey: "AIzaSyBB5e6zJKujVL4UwZRFv2zuY7NrJlkJTIQ",
+  authDomain: "culture-app-88cbd.firebaseapp.com",
+  projectId: "culture-app-88cbd",
+  storageBucket: "culture-app-88cbd.firebasestorage.app",
+  messagingSenderId: "18971487687",
+  appId: "1:18971487687:web:3ab98f47f5d0d389103de2",
+  measurementId: "G-L4HFMCS7H7"
 };
 
 const app = initializeApp(firebaseConfig);
