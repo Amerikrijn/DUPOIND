@@ -3,16 +3,15 @@ import { getFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 
 // ──────────────────────────────────────────────────────
-// 👉 GEKOPPELD AAN: culture-app-88cbd
+// 👉 GEKOPPELD AAN: culture-app-c3881 (Free Spark Plan)
 // ──────────────────────────────────────────────────────
 const firebaseConfig = {
-  apiKey: "AIzaSyBB5e6zJKujVL4UwZRFv2zuY7NrJlkJTIQ",
-  authDomain: "culture-app-88cbd.firebaseapp.com",
-  projectId: "culture-app-88cbd",
-  storageBucket: "culture-app-88cbd.firebasestorage.app",
-  messagingSenderId: "18971487687",
-  appId: "1:18971487687:web:3ab98f47f5d0d389103de2",
-  measurementId: "G-L4HFMCS7H7"
+  apiKey: "AIzaSyAOmmT883w6NMVp4_2VkC_WACDkc_VrNlE",
+  authDomain: "culture-app-c3881.firebaseapp.com",
+  projectId: "culture-app-c3881",
+  storageBucket: "culture-app-c3881.firebasestorage.app",
+  messagingSenderId: "1036005101120",
+  appId: "1:1036005101120:web:3dcdfbc58609288a8459a5"
 };
 
 const app = initializeApp(firebaseConfig);
