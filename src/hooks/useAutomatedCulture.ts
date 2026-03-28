@@ -98,7 +98,7 @@ export function useAutomatedCulture() {
       Object.entries(CITY_DETAILS).forEach(async ([city, details]) => {
         try {
           const res = await fetch(`https://de1.api.radio-browser.info/json/stations/bycountry/${details.country}?limit=5&order=clickcount&reverse=true`);
-          const data = await res.json() as any[];
+          const data = await res.json() as { name: string; url_resolved: string; favicon: string }[];
           if (data && data.length > 0) {
             // Pick first one with a favicon if possible
             const station = data.find((s) => s.favicon) || data[0];
@@ -107,12 +107,21 @@ export function useAutomatedCulture() {
         } catch (e) { console.error(`Radio fetch failed for ${city}`, e); }
       });
 
-      // 5. Daily Meal Inspiration (Global)
+      // 5. Daily Meal Inspiration (Filtered for Squad locations)
       try {
-        const res = await fetch('https://www.themealdb.com/api/json/v1/1/random.php');
-        const data = await res.json();
-        if (data.meals && data.meals.length > 0) {
-          setMeal(data.meals[0]);
+        const areas = ['Dutch', 'Portuguese', 'Indian'];
+        const randomArea = areas[Math.floor(Math.random() * areas.length)];
+        const filterRes = await fetch(`https://www.themealdb.com/api/json/v1/1/filter.php?a=${randomArea}`);
+        const filterData = await filterRes.json();
+        
+        if (filterData.meals && filterData.meals.length > 0) {
+          const randomMeal = filterData.meals[Math.floor(Math.random() * filterData.meals.length)];
+          // Fetch full details for the selected meal
+          const mealRes = await fetch(`https://www.themealdb.com/api/json/v1/1/lookup.php?i=${randomMeal.idMeal}`);
+          const mealData = await mealRes.json();
+          if (mealData.meals && mealData.meals.length > 0) {
+            setMeal(mealData.meals[0]);
+          }
         }
       } catch (e) { console.error('Meal fetch failed', e); }
 

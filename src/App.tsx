@@ -6,33 +6,34 @@ import {
 } from 'lucide-react';
 import './index.css';
 
-import { useWallPosts, useKudos, usePresence, useCultureData, useSquadCodes, useQuiz } from './hooks/useFirestore';
+import { useWallPosts, useKudos, usePresence, useCultureData, useSquadCodes, useQuiz, useGlobalChat } from './hooks/useFirestore';
 import { useWeather } from './hooks/useWeather';
 import { useAutomatedCulture } from './hooks/useAutomatedCulture';
 import type { Holiday, DayCycle, CityFact, MealInspiration, RadioStation } from './hooks/useAutomatedCulture';
-import { useLocation } from './hooks/useLocation';
 import { useTranslation } from './hooks/useTranslation';
 import type { Lang } from './hooks/useTranslation';
 import { useAdminAuth } from './hooks/useAdminAuth';
 import { getFullTranslation } from './utils/translate';
 import type { UserStatus, Dish } from './types';
-import { QUIZ_QUESTIONS, INITIAL_POLLS } from './data';
+import { QUIZ_QUESTIONS, INITIAL_POLLS, MOODS } from './data';
 
 import { PollsTab } from './components/PollsTab';
 import { QuizTab } from './components/QuizTab';
+import { GlobalChat } from './components/GlobalChat';
+import { IdeasTab } from './components/IdeasTab';
+import { useLivingApp } from './hooks/useLivingApp';
+import { SystemDashboard } from './components/SystemDashboard';
 
 // ─────────────────────────────────────────
 // Constants
 // ─────────────────────────────────────────
-type Tab = 'dashboard' | 'connect' | 'wall' | 'quiz' | 'polls';
+type Tab = 'dashboard' | 'connect' | 'wall' | 'quiz' | 'polls' | 'chat' | 'ideas';
 
 const CITIES = [
-  { id: 'utrecht', name: 'Utrecht', flag: '🇳🇱', timezone: 'Europe/Amsterdam', holiday: "King's Day in 30 dagen" },
+  { id: 'utrecht', name: 'Utrecht', flag: '🇳🇱', timezone: 'Europe/Amsterdam' },
   { id: 'lisbon',  name: 'Lisbon',  flag: '🇵🇹', timezone: 'Europe/Lisbon' },
-  { id: 'chennai', name: 'Chennai', flag: '🇮🇳', timezone: 'Asia/Kolkata', holiday: 'Tamil New Year volgende week' },
+  { id: 'chennai', name: 'Chennai', flag: '🇮🇳', timezone: 'Asia/Kolkata' },
 ];
-
-const MOODS = ['😄 Top dag!', '😊 Gewoon goed', '😐 Rustig', '🫠 Beetje moe', '🔥 Vol energie', '🎉 Feestmodus'];
 
 function getCityFlag(cityId: string) { return CITIES.find(c => c.id === cityId)?.flag ?? '🌍'; }
 function getCityName(cityId: string) { return CITIES.find(c => c.id === cityId)?.name ?? cityId; }
@@ -40,13 +41,13 @@ function getCityName(cityId: string) { return CITIES.find(c => c.id === cityId)?
 // ─────────────────────────────────────────
 // Auth Screen
 // ─────────────────────────────────────────
-function AuthScreen({ onLogin, t, adminAuth }: { 
+function AuthScreen({ onLogin, setLang, t, adminAuth }: { 
   onLogin: (name: string, city: string) => void, 
+  setLang: (l: Lang) => void,
   t: (k: string) => string,
   adminAuth: ReturnType<typeof useAdminAuth>
 }) {
   const { codes, loading: codesLoading } = useSquadCodes();
-  const { detectedCity } = useLocation();
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
   const [city, setCity] = useState('Utrecht');
@@ -58,14 +59,22 @@ function AuthScreen({ onLogin, t, adminAuth }: {
   const [adminEmail, setAdminEmail] = useState('');
   const [adminPass, setAdminPass] = useState('');
 
-  // Use a ref to only auto-set city once per session
-  const locSet = useRef(false);
+  // IP Detection for Smart Language & Location
   useEffect(() => {
-    if (detectedCity && !locSet.current) {
-      setCity(detectedCity);
-      locSet.current = true;
-    }
-  }, [detectedCity]);
+    const detect = async () => {
+      try {
+        const res = await fetch('https://ipapi.co/json/');
+        const data = await res.json();
+        if (data.country_code === 'NL') { setLang('NL'); setCity('Utrecht'); }
+        else if (data.country_code === 'PT') { setLang('PT'); setCity('Lisbon'); }
+        else if (data.country_code === 'IN') { setLang('TA'); setCity('Chennai'); }
+        else { setLang('EN'); }
+      } catch {
+        console.warn('IP Detection failed, using defaults.');
+      }
+    };
+    detect();
+  }, [setLang]);
 
   const checkCode = () => {
     const input = code.trim().toUpperCase();
@@ -73,17 +82,17 @@ function AuthScreen({ onLogin, t, adminAuth }: {
       setStep('profile');
       setError('');
     } else {
-      setError('Ongeldige code. Vraag je team lead.');
+      setError(t('invalid_code') || 'Ongeldige code.');
       setShake(true); setTimeout(() => setShake(false), 500);
     }
   };
-
   const handleAdminLogin = async () => {
     try {
       setError('');
       await adminAuth.login(adminEmail, adminPass);
-    } catch (e: any) {
-      setError('Admin login mislukt: ' + e.message);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Unknown error';
+      setError('Admin login mislukt: ' + msg);
     }
   };
 
@@ -109,29 +118,31 @@ function AuthScreen({ onLogin, t, adminAuth }: {
             </div>
             {error && <p className="auth-error">{error}</p>}
             <button className="btn-auth" onClick={handleAdminLogin}>Admin Login</button>
-            <button className="btn-text" onClick={() => setStep('code')} style={{ marginTop: '1rem', width: '100%', fontSize: '0.8rem', opacity: 0.6 }}>Terug naar Squad Login</button>
+            <button className="btn-text" onClick={() => setStep('code')} style={{ marginTop: '1rem', width: '100%', fontSize: '0.8rem', opacity: 0.6 }}>Back</button>
           </div>
         ) : step === 'code' ? (
           <div className="auth-form">
             <div className="auth-field">
               <label><Lock size={14} /> {t('squad_code')}</label>
-              <input className="auth-input" type="text" placeholder="bijv. DUPOIND" value={code}
+              <input className="auth-input" type="text" placeholder={t('squad_code_placeholder')} value={code}
                 onChange={e => setCode(e.target.value)} onKeyDown={e => e.key === 'Enter' && checkCode()} />
               {error && <p className="auth-error">{error}</p>}
             </div>
-            <p className="auth-hint">Geen wachtwoord of email nodig.<br />💡 Vraag je team lead om de code.</p>
+            <p className="auth-hint">{t('squad_hint')}</p>
             <button className="btn-auth" onClick={checkCode} disabled={codesLoading}>
               {codesLoading ? t('loading') : t('continue')} <ArrowRight size={18} />
             </button>
-            <button className="btn-text" onClick={() => setStep('admin')} style={{ marginTop: '1.5rem', width: '100%', fontSize: '0.7rem', opacity: 0.4 }}>Beheerder? Klik hier</button>
+            <button className="btn-text" onClick={() => setStep('admin')} style={{ marginTop: '1.5rem', width: '100%', fontSize: '0.7rem', opacity: 0.4 }}>Admin? Klik hier</button>
           </div>
         ) : (
           <div className="auth-form">
             <div className="auth-field"><label>{t('name')}</label>
-              <input className="auth-input" type="text" placeholder="bijv. Martijn" value={name} onChange={e => setName(e.target.value)} /></div>
+              <input className="auth-input" type="text" placeholder={t('name_placeholder')} value={name} onChange={e => setName(e.target.value)} /></div>
             <div className="auth-field"><label>{t('location')}</label>
               <select className="auth-input auth-select" value={city} onChange={e => setCity(e.target.value)}>
-                <option>Utrecht</option><option>Lisbon</option><option>Chennai</option>
+                <option value="Utrecht">Utrecht</option>
+                <option value="Lisbon">Lisbon</option>
+                <option value="Chennai">Chennai</option>
               </select></div>
             <button className="btn-auth" onClick={() => name.trim() && onLogin(name.trim(), city)} disabled={!name.trim()}>
               {t('join')} <Check size={18} />
@@ -160,7 +171,7 @@ function AdminDashboard({ onSeed, onLogout, codes }: { onSeed: () => void, onLog
 
         <div style={{ marginBottom: '2.5rem', background: 'rgba(255,255,255,0.03)', padding: '1.5rem', borderRadius: '16px' }}>
           <h3>🚀 Database Initialization</h3>
-          <p style={{ fontSize: '0.85rem', opacity: 0.7, marginBottom: '1rem' }}>Gebruik dit alleen voor een nieuwe installatie om de basis-data te vullen.</p>
+          <p style={{ fontSize: '0.85rem', opacity: 0.7, marginBottom: '1rem' }}>Initializes standard culture data in Firestore.</p>
           <button className="btn-auth" style={{ background: 'var(--accent)' }} onClick={onSeed}>Seed Database Now</button>
         </div>
 
@@ -187,16 +198,16 @@ function AdminDashboard({ onSeed, onLogout, codes }: { onSeed: () => void, onLog
 // ─────────────────────────────────────────
 // Cities Hub (real weather + holidays + sun)
 // ─────────────────────────────────────────
-function CitiesHub({ holidays, dayCycles, t }: { holidays: Record<string, Holiday | null>, dayCycles: Record<string, DayCycle | null>, t: (k: string) => string }) {
+function CitiesHub({ holidays, dayCycles, t }: { holidays: Record<string, Holiday | null>, dayCycles: Record<string, DayCycle | null>, t: (k: string, obj?: Record<string, string | number>) => string }) {
   const [times, setTimes] = useState<Record<string, string>>({});
   const weather = useWeather();
 
   useEffect(() => {
     const update = () => {
       const now = new Date();
-      const t: Record<string, string> = {};
-      CITIES.forEach(c => { t[c.id] = now.toLocaleTimeString('nl-NL', { timeZone: c.timezone, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }); });
-      setTimes(t);
+      const tObjs: Record<string, string> = {};
+      CITIES.forEach(c => { tObjs[c.id] = now.toLocaleTimeString('nl-NL', { timeZone: c.timezone, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }); });
+      setTimes(tObjs);
     };
     update(); const iv = setInterval(update, 1000); return () => clearInterval(iv);
   }, []);
@@ -209,11 +220,20 @@ function CitiesHub({ holidays, dayCycles, t }: { holidays: Record<string, Holida
           const w = weather[city.id];
           const h = holidays[city.id];
           const d = dayCycles[city.id];
+          
+          let holidayText = '';
+          if (h) {
+            const hDate = new Date(h.date);
+            const now = new Date();
+            const diff = Math.ceil((hDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+            holidayText = diff === 0 ? t('today') : t('in_days').replace('{n}', diff.toString());
+          }
+
           return (
             <div key={city.id} className={`city-card ${city.id} ${d?.status || ''}`}>
               <div className="city-header">
                 <span>{city.flag} {city.name}</span>
-                <span className="sun-status" title={`Sunsise: ${d?.sunrise}, Sunset: ${d?.sunset}`}>
+                <span className="sun-status">
                   {d?.status === 'night' ? '🌙' : d?.status === 'twilight' ? '🌅' : '☀️'}
                 </span>
               </div>
@@ -222,7 +242,7 @@ function CitiesHub({ holidays, dayCycles, t }: { holidays: Record<string, Holida
                 <span className="meta-item">
                   {w?.loading ? '⏳' : `${w?.emoji} ${w?.temp}°C – ${w?.desc}`}
                 </span>
-                {h && <span className="city-holiday" title={h.name}>🎉 {h.localName}</span>}
+                {h && <span className="city-holiday">🎉 {h.localName} ({holidayText})</span>}
               </div>
             </div>
           );
@@ -359,6 +379,7 @@ function DashboardTab({ userName, userCity, userCityId, wotd, autoCulture, t }: 
           </div>
         </div>
         <LocalFlavors meal={autoCulture.meal} t={t} />
+        <SystemDashboard />
       </div>
       <div className="glass-panel kudos-panel">
         <div className="panel-header">
@@ -399,14 +420,15 @@ interface ConnectProps {
   icebreakers: string[]; 
   onPostToWall: (content: string, emoji: string) => void;
   t: (k: string) => string;
+  squad: UserStatus[];
+  setStatus: (userId: string, status: UserStatus) => Promise<void>;
 }
-function ConnectTab({ userName, userCityId, icebreakers, onPostToWall, t }: ConnectProps) {
+function ConnectTab({ userName, userCityId, icebreakers, onPostToWall, t, squad, setStatus }: ConnectProps) {
   const [userId] = useState(() => {
     let id = localStorage.getItem('dupoind_userId');
     if (!id) { id = Math.random().toString(36).substr(2, 9); localStorage.setItem('dupoind_userId', id); }
     return id;
   });
-  const { squad, setStatus } = usePresence();
   const [available, setAvailable] = useState(false);
   const [mood, setMood] = useState(MOODS[0]);
   const [spinning, setSpinning] = useState(false);
@@ -433,24 +455,19 @@ function ConnectTab({ userName, userCityId, icebreakers, onPostToWall, t }: Conn
   const spin = useCallback(async () => {
     setSpinning(true); setDone(false); setCrew([]); setIcebreaker(''); setAnswer(''); setAnswered(false);
     
-    try {
-      const res = await fetch('https://randomuser.me/api/?results=2&nat=nl,pt,in');
-      const data = await res.json();
-      const randoms = (data.results as any[]).map((r) => ({
-        name: r.name.first,
-        cityId: r.location.country === 'Netherlands' ? 'utrecht' : r.location.country === 'Portugal' ? 'lisbon' : 'chennai'
-      }));
+    // Use real presence data instead of external API
+    setTimeout(() => {
+      const others = squad.filter(s => s.name !== userName);
+      // Pick 2 random users from the squad (or fewer if not enough)
+      const shuffled = [...others].sort(() => 0.5 - Math.random());
+      const selected = shuffled.slice(0, 2);
       
-      setTimeout(() => {
-        setCrew([{ name: 'Jij', cityId: userCityId }, ...randoms]);
-        const iceList = icebreakers.length > 0 ? icebreakers : ['Wat is je favoriete lokale lunch? 🥪'];
-        setIcebreaker(iceList[Math.floor(Math.random() * iceList.length)]);
-        setSpinning(false); setDone(true);
-      }, 2000);
-    } catch {
-      setSpinning(false);
-    }
-  }, [userCityId, icebreakers]);
+      setCrew([{ name: 'Jij (You)', cityId: userCityId }, ...selected.map(s => ({ name: s.name, cityId: s.cityId }))]);
+      const iceList = icebreakers.length > 0 ? icebreakers : ['Wat is je favoriete lokale lunch? 🥪'];
+      setIcebreaker(iceList[Math.floor(Math.random() * iceList.length)]);
+      setSpinning(false); setDone(true);
+    }, 1500);
+  }, [userName, userCityId, icebreakers, squad]);
 
   const postAnswer = async () => {
     if (!answer.trim()) return;
@@ -471,9 +488,9 @@ function ConnectTab({ userName, userCityId, icebreakers, onPostToWall, t }: Conn
           </button>
           {available && (
             <div className="mood-picker">
-              <span className="mood-label">Hoe voel je je?</span>
+              <span className="mood-label">{t('status_prompt')}</span>
               <div className="mood-options">
-                {MOODS.map(m => (
+                {['😄','😊','😐','🫠','🔥','🎉'].map(m => (
                   <button key={m} className={`mood-btn ${mood === m ? 'active' : ''}`} onClick={() => setMood(m)}>{m}</button>
                 ))}
               </div>
@@ -612,7 +629,7 @@ function CultureWallTab({ userName, userCityId, t }: { userName: string; userCit
                   {Array.isArray(post.likes) ? post.likes.length : 0}
                 </button>
                 <button className="translate-btn" onClick={() => toggleTrans(post.id)}>
-                  <Globe size={14} /> {expandedTranslations.has(post.id) ? 'Verberg' : 'Vertaal (Live API)'}
+                  <Globe size={14} /> {expandedTranslations.has(post.id) ? t('hide') : t('translate')}
                 </button>
               </div>
             </div>
@@ -638,6 +655,40 @@ export default function App() {
   const autoCulture = useAutomatedCulture();
   const { lang, setLang, t } = useTranslation();
   const adminAuth = useAdminAuth();
+  const { squad, setStatus } = usePresence();
+  const { sendMsg } = useGlobalChat();
+
+  // Initialize the Living App Brain
+  useLivingApp();
+  
+  // Self-Feeding Alert System: Auto-post holidays/stats to the Wall & Chat
+  const hasPostedHoliday = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!user) return;
+    Object.entries(autoCulture.holidays).forEach(async ([city, holiday]) => {
+      if (holiday && !hasPostedHoliday.current.has(holiday.date + city)) {
+        hasPostedHoliday.current.add(holiday.date + city);
+        
+        const hDate = new Date(holiday.date);
+        const diff = Math.ceil((hDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+        const timing = diff === 0 ? t('today') : t('in_days').replace('{n}', diff.toString());
+        
+        const content = `📢 AUTO-ALERT: ${holiday.localName} (${timing}) in ${city.charAt(0).toUpperCase() + city.slice(1)}! 🎉`;
+        const trans = await getFullTranslation(content, 'nl'); 
+        
+        await sendMsg('DUPOIND Assistant', content, 'NL');
+
+        const { addDoc, collection, serverTimestamp } = await import('firebase/firestore');
+        const { db: firestore } = await import('./firebase');
+        await addDoc(collection(firestore, 'wallPosts'), {
+          author: 'DUPOIND Assistant', city: 'System', cityId: 'system',
+          content, emoji: '🎉', likes: [],
+          time: new Date().toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' }),
+          translations: trans, createdAt: serverTimestamp(),
+        });
+      }
+    });
+  }, [autoCulture.holidays, user, t, sendMsg]);
 
   const handleLogin = (name: string, city: string) => {
     const u = { name, city }; setUser(u);
@@ -680,7 +731,7 @@ export default function App() {
   };
 
   if (adminAuth.adminUser) return <AdminDashboard onSeed={handleSeed} onLogout={adminAuth.logout} codes={codes} />;
-  if (!user) return <AuthScreen onLogin={handleLogin} t={t} adminAuth={adminAuth} />;
+  if (!user) return <AuthScreen onLogin={handleLogin} setLang={setLang} t={t} adminAuth={adminAuth} />;
   const cityId = user.city.toLowerCase();
 
   const postToWall = async (content: string, emoji: string) => {
@@ -705,6 +756,8 @@ export default function App() {
           <button className={`tab-btn ${activeTab === 'wall' ? 'active' : ''}`} onClick={() => setActiveTab('wall')}><LayoutGrid size={18} /> <span className="tab-label">{t('wall')}</span></button>
           <button className={`tab-btn ${activeTab === 'polls' ? 'active' : ''}`} onClick={() => setActiveTab('polls')}><BarChart2 size={18} /> <span className="tab-label">{t('polls')}</span></button>
           <button className={`tab-btn ${activeTab === 'quiz' ? 'active' : ''}`} onClick={() => setActiveTab('quiz')}><Trophy size={18} /> <span className="tab-label">{t('quiz')}</span></button>
+          <button className={`tab-btn ${activeTab === 'ideas' ? 'active' : ''}`} onClick={() => setActiveTab('ideas')}><Lightbulb size={18} /> <span className="tab-label">{t('ideas')}</span></button>
+          <button className={`tab-btn ${activeTab === 'chat' ? 'active' : ''}`} onClick={() => setActiveTab('chat')}><MessageSquare size={18} /> <span className="tab-label">{t('global_chat')}</span></button>
         </nav>
         <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <select className="lang-select" value={lang} onChange={e => setLang(e.target.value as Lang)}>
@@ -718,10 +771,16 @@ export default function App() {
       </header>
       <main>
         {activeTab === 'dashboard' && <DashboardTab userName={user.name} userCity={user.city} userCityId={cityId} wotd={wotd} autoCulture={autoCulture} t={t} />}
-        {activeTab === 'connect' && <ConnectTab userName={user.name} userCityId={cityId} icebreakers={icebreakers} onPostToWall={postToWall} t={t} />}
+        {activeTab === 'connect' && <ConnectTab userName={user.name} userCityId={cityId} icebreakers={icebreakers} onPostToWall={postToWall} t={t} squad={squad} setStatus={setStatus} />}
         {activeTab === 'wall' && <CultureWallTab userName={user.name} userCityId={cityId} t={t} />}
         {activeTab === 'polls' && <PollsTab userName={user.name} userCityId={cityId} />}
-        {activeTab === 'quiz' && <QuizTab questions={quizQuestions} />}
+        {activeTab === 'quiz' && <QuizTab questions={quizQuestions} userName={user.name} userCityId={cityId} />}
+        {activeTab === 'ideas' && <IdeasTab userName={user.name} userCityId={cityId} />}
+        {activeTab === 'chat' && (
+          <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+            <GlobalChat userName={user.name} />
+          </div>
+        )}
       </main>
     </div>
   );

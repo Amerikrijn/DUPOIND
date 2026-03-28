@@ -4,7 +4,7 @@ import {
   orderBy, serverTimestamp, updateDoc, doc, arrayUnion, arrayRemove, limit
 } from 'firebase/firestore';
 import { db } from '../firebase';
-import type { WallPost, KudoEntry, Poll, UserStatus, Dish, QuizQuestion } from '../types';
+import type { WallPost, KudoEntry, Poll, UserStatus, Dish, QuizQuestion, Idea, SystemLog } from '../types';
 
 // ── Wall Posts ──────────────────────────────────────────
 export function useWallPosts() {
@@ -72,12 +72,15 @@ export function usePolls() {
     // Remove vote from all options first, then add to chosen
     const poll = polls.find(p => p.id === pollId);
     if (!poll) return;
-    const newOptions = poll.options.map((opt, i) => ({
-      ...opt,
-      votes: i === optionIndex
-        ? [...opt.votes.filter(v => v !== userName), userName]
-        : opt.votes.filter(v => v !== userName),
-    }));
+    const newOptions = poll.options.map((opt, i) => {
+      const votes = opt.votes || [];
+      return {
+        ...opt,
+        votes: i === optionIndex
+          ? [...votes.filter(v => v !== userName), userName]
+          : votes.filter(v => v !== userName),
+      };
+    });
     await updateDoc(ref, { options: newOptions });
   };
 
@@ -90,7 +93,14 @@ export function usePresence() {
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'presence'), snap => {
-      setSquad(snap.docs.map(d => ({ ...d.data(), id: d.id } as UserStatus)));
+      const now = Date.now();
+      const docs = snap.docs.map(d => ({ ...d.data(), id: d.id } as UserStatus));
+      // Filter for users seen in the last 5 minutes AND who are 'available'
+      const active = docs.filter(s => {
+        const lastSeen = new Date(s.lastSeen).getTime();
+        return s.available && (now - lastSeen < 5 * 60 * 1000);
+      });
+      setSquad(active);
     });
     return unsub;
   }, []);
@@ -185,6 +195,45 @@ export function useQuiz() {
   return { questions, loading, addQuestion };
 }
 
+// ── Quiz Scores ─────────────────────────────────────────
+export function useQuizScores() {
+  const [scores, setScores] = useState<{name:string, score:number, cityId:string}[]>([]);
+  useEffect(() => {
+    const q = query(collection(db, 'quizScores'), orderBy('score', 'desc'), limit(10));
+    const unsub = onSnapshot(q, snap => {
+      setScores(snap.docs.map(d => d.data() as {name:string, score:number, cityId:string}));
+    });
+    return unsub;
+  }, []);
+
+  const saveScore = async (name: string, cityId: string, score: number) => {
+    await addDoc(collection(db, 'quizScores'), { name, cityId, score, createdAt: serverTimestamp() });
+  };
+
+  return { scores, saveScore };
+}
+
+// ── Global Chat ─────────────────────────────────────────
+export type ChatMsg = { id:string, author:string, text:string, lang:string, trans: {nl:string, pt:string, ta:string}, createdAt: { seconds: number, nanoseconds: number } | null };
+export function useGlobalChat() {
+  const [messages, setMessages] = useState<ChatMsg[]>([]);
+  useEffect(() => {
+    const q = query(collection(db, 'globalChat'), orderBy('createdAt', 'desc'), limit(50));
+    const unsub = onSnapshot(q, snap => {
+      setMessages(snap.docs.map(d => ({ id: d.id, ...d.data() } as ChatMsg)).reverse());
+    });
+    return unsub;
+  }, []);
+
+  const sendMsg = async (author: string, text: string, lang: string) => {
+    const { getFullTranslation } = await import('../utils/translate');
+    const trans = await getFullTranslation(text, lang.toLowerCase());
+    await addDoc(collection(db, 'globalChat'), { author, text, lang, trans, createdAt: serverTimestamp() });
+  };
+
+  return { messages, sendMsg };
+}
+
 // ── Squad Codes ──────────────────────────────────────────
 export function useSquadCodes() {
   const [codes, setCodes] = useState<string[]>([]);
@@ -217,4 +266,62 @@ export function useSquadCodes() {
   };
 
   return { codes, loading, addCode, removeCode };
+}
+
+// ── Ideas / Suggestions ──────────────────────────────────
+export function useIdeas() {
+  const [ideas, setIdeas] = useState<Idea[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const q = query(collection(db, 'ideas'), orderBy('createdAt', 'desc'), limit(50));
+    const unsub = onSnapshot(q, snap => {
+      setIdeas(snap.docs.map(d => ({ id: d.id, ...d.data() } as Idea)));
+      setLoading(false);
+    });
+    return unsub;
+  }, []);
+
+  const addIdea = async (idea: Omit<Idea, 'id' | 'votes' | 'status' | 'createdAt'>) => {
+    await addDoc(collection(db, 'ideas'), {
+      ...idea,
+      votes: [],
+      status: 'pending',
+      createdAt: new Date().toISOString()
+    });
+  };
+
+  const toggleVote = async (ideaId: string, userName: string, voted: boolean) => {
+    const ref = doc(db, 'ideas', ideaId);
+    await updateDoc(ref, { votes: voted ? arrayRemove(userName) : arrayUnion(userName) });
+  };
+
+  const updateStatus = async (ideaId: string, status: 'pending' | 'realized' | 'rejected') => {
+    const ref = doc(db, 'ideas', ideaId);
+    await updateDoc(ref, { status });
+  };
+
+  return { ideas, loading, addIdea, toggleVote, updateStatus };
+}
+
+// ── System Logs ──────────────────────────────────────────
+export function useSystemLogs() {
+  const [logs, setLogs] = useState<SystemLog[]>([]);
+
+  useEffect(() => {
+    const q = query(collection(db, 'systemLogs'), orderBy('timestamp', 'desc'), limit(10));
+    const unsub = onSnapshot(q, snap => {
+      setLogs(snap.docs.map(d => ({ id: d.id, ...d.data() } as SystemLog)));
+    });
+    return unsub;
+  }, []);
+
+  const addLog = async (log: Omit<SystemLog, 'id' | 'timestamp'>) => {
+    await addDoc(collection(db, 'systemLogs'), {
+      ...log,
+      timestamp: new Date().toISOString()
+    });
+  };
+
+  return { logs, addLog };
 }

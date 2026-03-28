@@ -61,4 +61,34 @@ export type QuizQuestion = {
   city: string;
   cityId: CityId;
   explanation: string;
+  author?: string;
+  authorCity?: string;
+};
+
+export type Idea = {
+  id: string;
+  title: string;
+  description: string;
+  author: string;
+  cityId: string;
+  status: 'pending' | 'realized' | 'rejected';
+  votes: string[]; // array of user names who voted
+  category: 'feature' | 'event' | 'poll' | 'fact' | 'suggestion';
+  createdAt: string;
+};
+
+export type AssistantResponse = {
+  id: string;
+  role: 'assistant';
+  content: string;
+  timestamp: string;
+  type: 'fact' | 'news' | 'weather' | 'translation' | 'general';
+};
+
+export type SystemLog = {
+  id: string;
+  action: string;
+  timestamp: string;
+  status: 'success' | 'warning' | 'error';
+  details?: string;
 };
