@@ -35,6 +35,7 @@ export type Poll = {
 };
 
 export type UserStatus = {
+  id?: string;
   name: string;
   city: string;
   cityId: string;
@@ -43,7 +44,17 @@ export type UserStatus = {
   lastSeen: string;
 };
 
+export type Dish = {
+  id?: string;
+  cityId: string;
+  name: string;
+  description: string;
+  image: string; // Emoji for now, but ready for URLs
+  flag: string;
+};
+
 export type QuizQuestion = {
+  id?: string;
   question: string;
   options: string[];
   correct: number;

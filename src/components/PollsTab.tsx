@@ -1,14 +1,12 @@
 import { useState } from 'react';
 import { BarChart2, X } from 'lucide-react';
 import { usePolls } from '../hooks/useFirestore';
-import { INITIAL_POLLS } from '../data';
 
 export function PollsTab({ userName, userCityId }: { userName: string; userCityId: string }) {
   const { polls, createPoll, vote } = usePolls();
   const [showCreate, setShowCreate] = useState(false);
   const [question, setQuestion] = useState('');
   const [options, setOptions] = useState(['', '', '']);
-  const displayPolls = polls.length > 0 ? polls : INITIAL_POLLS;
 
   const handleCreate = async () => {
     if (!question.trim() || options.filter(o => o.trim()).length < 2) return;
@@ -43,7 +41,8 @@ export function PollsTab({ userName, userCityId }: { userName: string; userCityI
         </div>
       )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-        {displayPolls.map(poll => {
+        {polls.length === 0 && <div className="empty-state">Geen actieve polls. Start er zelf een! 🗳️</div>}
+        {polls.map(poll => {
           const totalVotes = poll.options.reduce((s, o) => s + (o.votes?.length || 0), 0);
           const userVote = poll.options.findIndex(o => o.votes?.includes(userName));
           return (

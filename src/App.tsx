@@ -2,14 +2,17 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   Globe, Heart, MessageSquare, Coffee, Send,
   Shuffle, Camera, Home, LayoutGrid, Lock, ArrowRight, X, Check,
-  Lightbulb, Image, BarChart2, Zap, Trophy, Database,
+  Lightbulb, Image, BarChart2, Zap, Trophy, Database, Trash2, Plus, Utensils
 } from 'lucide-react';
 import './index.css';
 
-import { useWallPosts, useKudos, usePresence, useCultureData } from './hooks/useFirestore';
+import { 
+  useWallPosts, useKudos, usePresence, useCultureData, useSquadCodes, useQuiz 
+} from './hooks/useFirestore';
 import { useWeather } from './hooks/useWeather';
 import { getFullTranslation } from './utils/translate';
-import type { UserStatus } from './types';
+import type { UserStatus, Dish, QuizQuestion } from './types';
+import { QUIZ_QUESTIONS, INITIAL_POLLS } from './data';
 
 import { PollsTab } from './components/PollsTab';
 import { QuizTab } from './components/QuizTab';
@@ -25,7 +28,6 @@ const CITIES = [
   { id: 'chennai', name: 'Chennai', flag: '🇮🇳', timezone: 'Asia/Kolkata', holiday: 'Tamil New Year volgende week' },
 ];
 
-const VALID_CODES = ['DUPOIND', 'UTRECHT', 'LISBON1', 'CHENNAI'];
 const MOODS = ['😄 Top dag!', '😊 Gewoon goed', '😐 Rustig', '🫠 Beetje moe', '🔥 Vol energie', '🎉 Feestmodus'];
 
 function getCityFlag(cityId: string) { return CITIES.find(c => c.id === cityId)?.flag ?? '🌍'; }
@@ -35,27 +37,65 @@ function getCityName(cityId: string) { return CITIES.find(c => c.id === cityId)?
 // Auth Screen
 // ─────────────────────────────────────────
 function AuthScreen({ onLogin }: { onLogin: (name: string, city: string) => void }) {
+  const { codes, addCode, removeCode, loading: codesLoading } = useSquadCodes();
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
   const [city, setCity] = useState('Utrecht');
   const [step, setStep] = useState<'code' | 'profile'>('code');
   const [error, setError] = useState('');
   const [shake, setShake] = useState(false);
+  const [showAdmin, setShowAdmin] = useState(false);
+  const [newAdminCode, setNewAdminCode] = useState('');
 
   const checkCode = () => {
-    if (VALID_CODES.includes(code.trim().toUpperCase())) { setStep('profile'); setError(''); }
-    else { setError('Ongeldige code. Vraag je team lead.'); setShake(true); setTimeout(() => setShake(false), 500); }
+    const input = code.trim().toUpperCase();
+    if (codes.includes(input)) { 
+      setStep('profile'); 
+      setError(''); 
+    } else if (codes.length === 0 && !codesLoading) {
+      setError('Geen codes in database. Gebruik de Seed tool.');
+      setShake(true);
+    } else { 
+      setError('Ongeldige code. Vraag je team lead.'); 
+      setShake(true); 
+      setTimeout(() => setShake(false), 500); 
+    }
+  };
+
+  const handleAddCode = async () => {
+    if (!newAdminCode.trim()) return;
+    await addCode(newAdminCode);
+    setNewAdminCode('');
   };
 
   return (
     <div className="auth-container">
       <div className={`auth-card ${shake ? 'shake' : ''}`}>
-        <div className="auth-logo">
+        <div className="auth-logo" onClick={() => setShowAdmin(!showAdmin)} style={{ cursor: 'pointer' }}>
           <div className="logo-icon-large"><Globe size={32} color="white" /></div>
           <h1 className="auth-title">DUPO<span>IND</span></h1>
           <p className="auth-subtitle">Utrecht · Lisbon · Chennai</p>
         </div>
-        {step === 'code' ? (
+
+        {showAdmin ? (
+          <div className="auth-form admin-panel">
+            <h3 style={{ marginBottom: '1rem', color: 'var(--accent)' }}>SQUAD CODE BEHEER</h3>
+            <div className="admin-list" style={{ maxHeight: '150px', overflowY: 'auto', marginBottom: '1rem' }}>
+              {codes.map(c => (
+                <div key={c} className="admin-item" style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', marginBottom: '0.5rem' }}>
+                  <span>{c}</span>
+                  <button onClick={() => removeCode(c)} className="btn-icon-sm" style={{ color: 'var(--error)' }}><Trash2 size={14} /></button>
+                </div>
+              ))}
+              {codes.length === 0 && <p className="auth-hint">Geen codes. Voeg er een toe!</p>}
+            </div>
+            <div className="auth-field">
+              <input className="auth-input" type="text" placeholder="Nieuwe code..." value={newAdminCode} onChange={e => setNewAdminCode(e.target.value)} />
+              <button className="btn-auth" style={{ marginTop: '0.5rem' }} onClick={handleAddCode}><Plus size={16} /> Toevoegen</button>
+            </div>
+            <button className="btn-icon-sm" onClick={() => setShowAdmin(false)} style={{ marginTop: '1rem', width: '100%' }}>Sluiten</button>
+          </div>
+        ) : step === 'code' ? (
           <div className="auth-form">
             <div className="auth-field">
               <label><Lock size={14} /> Squad Code</label>
@@ -63,8 +103,10 @@ function AuthScreen({ onLogin }: { onLogin: (name: string, city: string) => void
                 onChange={e => setCode(e.target.value)} onKeyDown={e => e.key === 'Enter' && checkCode()} />
               {error && <p className="auth-error">{error}</p>}
             </div>
-            <p className="auth-hint">Geen wachtwoord of email nodig.<br />💡 Probeer <strong>DUPOIND</strong></p>
-            <button className="btn-auth" onClick={checkCode}>Doorgaan <ArrowRight size={18} /></button>
+            <p className="auth-hint">Geen wachtwoord of email nodig.<br />💡 Vraag je team lead om de code.</p>
+            <button className="btn-auth" onClick={checkCode} disabled={codesLoading}>
+              {codesLoading ? 'Codes laden...' : 'Doorgaan'} <ArrowRight size={18} />
+            </button>
           </div>
         ) : (
           <div className="auth-form">
@@ -126,7 +168,7 @@ function CitiesHub() {
 }
 
 // ─────────────────────────────────────────
-// Cultural Fact (Real-time from Firestore)
+// Cultural Fact 
 // ─────────────────────────────────────────
 interface CultureFactProps { facts: { cityId: string; flag: string; city: string; fact: string }[] }
 function CulturalFact({ facts }: CultureFactProps) {
@@ -143,14 +185,40 @@ function CulturalFact({ facts }: CultureFactProps) {
 }
 
 // ─────────────────────────────────────────
+// Local Flavors 
+// ─────────────────────────────────────────
+function LocalFlavors({ dishes }: { dishes: Dish[] }) {
+  return (
+    <div className="glass-panel">
+      <div className="panel-header"><Utensils className="panel-icon" size={22} /><h2>Local Flavors</h2></div>
+      <div className="dishes-scroll-container">
+        {dishes.length === 0 && <p className="auth-hint">Gerechten worden geladen...</p>}
+        <div className="dishes-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '1rem' }}>
+          {dishes.map((d, i) => (
+            <div key={i} className={`dish-card ${d.cityId}`} style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '1rem', textAlign: 'center' }}>
+              <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>{d.image}</div>
+              <h4 style={{ fontSize: '0.9rem', marginBottom: '0.25rem' }}>{d.name}</h4>
+              <p style={{ fontSize: '0.75rem', opacity: 0.7, lineHeight: 1.3 }}>{d.description}</p>
+              <div style={{ marginTop: '0.5rem', fontSize: '0.75rem' }}>{d.flag} {d.cityId.toUpperCase()}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────
 // Dashboard Tab
 // ─────────────────────────────────────────
 interface DashboardProps { 
   userName: string; 
+  userCity: string;
   wotd: { lang: string; word: string; translation: string; useCase: string }[]; 
-  facts: { cityId: string; flag: string; city: string; fact: string }[] 
+  facts: { cityId: string; flag: string; city: string; fact: string }[];
+  dishes: Dish[];
 }
-function DashboardTab({ userName, wotd, facts }: DashboardProps) {
+function DashboardTab({ userName, userCity, wotd, facts, dishes }: DashboardProps) {
   const { kudos, addKudo } = useKudos();
   const [showForm, setShowForm] = useState(false);
   const [newKudo, setNewKudo] = useState({ to: '', message: '' });
@@ -161,7 +229,7 @@ function DashboardTab({ userName, wotd, facts }: DashboardProps) {
     setIsTranslating(true);
     const trans = await getFullTranslation(newKudo.message);
     await addKudo({
-      from: userName, fromCity: 'Jouw locatie', to: newKudo.to,
+      from: userName, fromCity: userCity, to: newKudo.to,
       message: newKudo.message, translation: trans.nl + ' / ' + trans.pt,
       emoji: '🙌', time: new Date().toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })
     });
@@ -172,23 +240,24 @@ function DashboardTab({ userName, wotd, facts }: DashboardProps) {
     <div className="dashboard-grid">
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
         <CitiesHub />
-        <CulturalFact facts={facts} />
-        <div className="glass-panel">
-          <div className="panel-header"><MessageSquare className="panel-icon" size={22} /><h2>Phrase of the Day</h2></div>
-          <div className="wotd-container">
-            {wotd.length === 0 && <div className="empty-state">Phrase data wordt geladen...</div>}
-            {wotd.map((item, idx) => (
-              <div key={idx} className="wotd-card">
-                <div className={`lang-badge ${item.lang.toLowerCase()}-badge`}>{item.lang}</div>
-                <div className="wotd-content">
-                  <h3>"{item.word}"</h3>
-                  <div className="wotd-translation">{item.translation}</div>
-                  <div className="wotd-example">{item.useCase}</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+          <CulturalFact facts={facts} />
+          <div className="glass-panel">
+            <div className="panel-header"><MessageSquare className="panel-icon" size={22} /><h2>Phrase</h2></div>
+            <div className="wotd-container" style={{ padding: '0.5rem' }}>
+              {wotd.slice(0, 2).map((item, idx) => (
+                <div key={idx} className="wotd-card" style={{ marginBottom: '0.5rem' }}>
+                  <div className={`lang-badge ${item.lang.toLowerCase()}-badge`}>{item.lang}</div>
+                  <div className="wotd-content">
+                    <h3 style={{ fontSize: '1rem' }}>"{item.word}"</h3>
+                    <div className="wotd-translation" style={{ fontSize: '0.8rem' }}>{item.translation}</div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
+        <LocalFlavors dishes={dishes} />
       </div>
       <div className="glass-panel kudos-panel">
         <div className="panel-header">
@@ -209,6 +278,7 @@ function DashboardTab({ userName, wotd, facts }: DashboardProps) {
           {kudos.map(k => (
             <div key={k.id} className="kudo-item">
               <div className="kudo-header"><span className="kudo-author">{k.emoji} {k.from}</span><span className="kudo-to">→ {k.to}</span></div>
+              <div className="kudo-city-label" style={{ fontSize: '0.7rem', opacity: 0.6, marginBottom: '0.5rem' }}>{k.fromCity} · {k.time}</div>
               <div className="kudo-message">{k.message}</div>
               <div className="kudo-translation"><Globe size={12} /> {k.translation}</div>
             </div>
@@ -229,6 +299,11 @@ interface ConnectProps {
   onPostToWall: (content: string, emoji: string) => void 
 }
 function ConnectTab({ userName, userCityId, icebreakers, onPostToWall }: ConnectProps) {
+  const [userId] = useState(() => {
+    let id = localStorage.getItem('dupoind_userId');
+    if (!id) { id = Math.random().toString(36).substr(2, 9); localStorage.setItem('dupoind_userId', id); }
+    return id;
+  });
   const { squad, setStatus } = usePresence();
   const [available, setAvailable] = useState(false);
   const [mood, setMood] = useState(MOODS[0]);
@@ -239,18 +314,18 @@ function ConnectTab({ userName, userCityId, icebreakers, onPostToWall }: Connect
   const [answer, setAnswer] = useState('');
   const [answered, setAnswered] = useState(false);
 
-  const updatePresence = async (avail: boolean, m: string) => {
+  const updatePresence = useCallback(async (avail: boolean, m: string) => {
     const status: UserStatus = { name: userName, city: getCityName(userCityId), cityId: userCityId, available: avail, mood: m, lastSeen: new Date().toISOString() };
-    await setStatus(status);
-  };
+    await setStatus(userId, status);
+  }, [userId, userName, userCityId, setStatus]);
+
+  useEffect(() => {
+    if (available) updatePresence(available, mood);
+  }, [available, mood, updatePresence]);
 
   const toggleAvailable = async () => {
     const next = !available; setAvailable(next);
     await updatePresence(next, mood);
-  };
-
-  const changeMood = async (m: string) => {
-    setMood(m); if (available) await updatePresence(available, m);
   };
 
   const spin = useCallback(async () => {
@@ -281,7 +356,7 @@ function ConnectTab({ userName, userCityId, icebreakers, onPostToWall }: Connect
     setAnswered(true);
   };
 
-  const availableSquad = squad.filter(s => s.available && s.name !== userName);
+  const availableSquad = squad.filter(s => s.available && s.id !== userId);
 
   return (
     <div className="connect-container">
@@ -297,7 +372,7 @@ function ConnectTab({ userName, userCityId, icebreakers, onPostToWall }: Connect
               <span className="mood-label">Hoe voel je je?</span>
               <div className="mood-options">
                 {MOODS.map(m => (
-                  <button key={m} className={`mood-btn ${mood === m ? 'active' : ''}`} onClick={() => changeMood(m)}>{m}</button>
+                  <button key={m} className={`mood-btn ${mood === m ? 'active' : ''}`} onClick={() => setMood(m)}>{m}</button>
                 ))}
               </div>
             </div>
@@ -308,7 +383,7 @@ function ConnectTab({ userName, userCityId, icebreakers, onPostToWall }: Connect
             <div className="available-label">🟢 Nu beschikbaar</div>
             <div className="available-list">
               {availableSquad.map(s => (
-                <div key={s.name} className={`available-member ${s.cityId}`}>
+                <div key={s.id} className={`available-member ${s.cityId}`}>
                   <span className="presence-dot green" />
                   <span className="av-name">{s.name}</span>
                   <span className="av-city">{getCityFlag(s.cityId)} {s.city}</span>
@@ -466,7 +541,8 @@ export default function App() {
     return saved ? JSON.parse(saved) as { name: string; city: string } : null;
   });
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
-  const { facts, wotd, icebreakers, seed } = useCultureData();
+  const { facts, wotd, icebreakers, dishes, seed } = useCultureData();
+  const { questions: quizQuestions } = useQuiz();
 
   const handleLogin = (name: string, city: string) => {
     const u = { name, city }; setUser(u);
@@ -485,7 +561,26 @@ export default function App() {
       { lang: 'PT', word: 'Saudade', translation: 'Deep longing', useCase: '"Saudade de Lisbon."' }
     ];
     const initialIce = ['Wat is je favoriete vakantiebestemming?', 'Bier of Wijn?', 'Koffie of Thee?'];
-    await seed({ facts: initialFacts, wotd: initialWotd, icebreakers: initialIce });
+    const initialCodes = ['DUPOIND', 'UTRECHT', 'LISBON1', 'CHENNAI'];
+    const initialDishes: Dish[] = [
+      { cityId: 'utrecht', name: 'Stamppot', description: 'Traditioneel Hollands prakkie.', image: '🍲', flag: '🇳🇱' },
+      { cityId: 'lisbon', name: 'Pastel de Nata', description: 'Heerlijk bladerdeeggebakje met room.', image: '🧁', flag: '🇵🇹' },
+      { cityId: 'chennai', name: 'Masala Dosa', description: 'Knapperige rijstpannenkoek met aardappel.', image: '🌯', flag: '🇮🇳' }
+    ];
+    const initialPolls = INITIAL_POLLS.map(p => ({ ...p, createdAt: new Date().toISOString() }));
+    
+    await seed({ 
+      facts: initialFacts, wotd: initialWotd, icebreakers: initialIce, 
+      squadCodes: initialCodes, dishes: initialDishes, quiz: QUIZ_QUESTIONS 
+    });
+
+    // Also seed initial polls if needed
+    const { addDoc, collection } = await import('firebase/firestore');
+    const { db } = await import('./firebase');
+    for (const poll of initialPolls) {
+      await addDoc(collection(db, 'polls'), poll);
+    }
+
     alert('Database gevuld! Ververs de app.');
   };
 
@@ -509,20 +604,20 @@ export default function App() {
       <header>
         <div className="logo-container"><div className="logo-icon"><Globe color="white" size={22} /></div><div className="logo-text">DUPO<span>IND</span></div></div>
         <nav className="tab-nav">
-          <button className={`tab-btn ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}><Home size={18} /> <span>Dashboard</span></button>
-          <button className={`tab-btn ${activeTab === 'connect' ? 'active' : ''}`} onClick={() => setActiveTab('connect')}><Shuffle size={18} /> <span>Connect</span></button>
-          <button className={`tab-btn ${activeTab === 'wall' ? 'active' : ''}`} onClick={() => setActiveTab('wall')}><LayoutGrid size={18} /> <span>Wall</span></button>
-          <button className={`tab-btn ${activeTab === 'polls' ? 'active' : ''}`} onClick={() => setActiveTab('polls')}><BarChart2 size={18} /> <span>Polls</span></button>
-          <button className={`tab-btn ${activeTab === 'quiz' ? 'active' : ''}`} onClick={() => setActiveTab('quiz')}><Trophy size={18} /> <span>Quiz</span></button>
+          <button className={`tab-btn ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}><Home size={18} /> <span className="tab-label">Dashboard</span></button>
+          <button className={`tab-btn ${activeTab === 'connect' ? 'active' : ''}`} onClick={() => setActiveTab('connect')}><Shuffle size={18} /> <span className="tab-label">Connect</span></button>
+          <button className={`tab-btn ${activeTab === 'wall' ? 'active' : ''}`} onClick={() => setActiveTab('wall')}><LayoutGrid size={18} /> <span className="tab-label">Wall</span></button>
+          <button className={`tab-btn ${activeTab === 'polls' ? 'active' : ''}`} onClick={() => setActiveTab('polls')}><BarChart2 size={18} /> <span className="tab-label">Polls</span></button>
+          <button className={`tab-btn ${activeTab === 'quiz' ? 'active' : ''}`} onClick={() => setActiveTab('quiz')}><Trophy size={18} /> <span className="tab-label">Quiz</span></button>
         </nav>
-        <div className="user-profile"><span>{getCityFlag(cityId)}</span><div className={`avatar ${cityId}`}>{user.name[0]}</div><span style={{ fontSize: '0.9rem' }}>{user.name}</span></div>
+        <div className="user-profile"><span>{getCityFlag(cityId)}</span><div className={`avatar ${cityId}`}>{user.name[0]}</div><span style={{ fontSize: '0.9rem' }} className="user-name-label">{user.name}</span></div>
       </header>
       <main>
-        {activeTab === 'dashboard' && <DashboardTab userName={user.name} facts={facts} wotd={wotd} />}
+        {activeTab === 'dashboard' && <DashboardTab userName={user.name} userCity={user.city} facts={facts} wotd={wotd} dishes={dishes} />}
         {activeTab === 'connect' && <ConnectTab userName={user.name} userCityId={cityId} icebreakers={icebreakers} onPostToWall={postToWall} />}
         {activeTab === 'wall' && <CultureWallTab userName={user.name} userCityId={cityId} />}
         {activeTab === 'polls' && <PollsTab userName={user.name} userCityId={cityId} />}
-        {activeTab === 'quiz' && <QuizTab />}
+        {activeTab === 'quiz' && <QuizTab questions={quizQuestions} />}
       </main>
       <SeedHelper onSeed={handleSeed} />
     </div>

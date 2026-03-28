@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import {
   collection, addDoc, onSnapshot, query,
-  orderBy, serverTimestamp, updateDoc, doc, arrayUnion, arrayRemove,
+  orderBy, serverTimestamp, updateDoc, doc, arrayUnion, arrayRemove, limit
 } from 'firebase/firestore';
 import { db } from '../firebase';
-import type { WallPost, KudoEntry, Poll, UserStatus } from '../types';
+import type { WallPost, KudoEntry, Poll, UserStatus, Dish, QuizQuestion } from '../types';
 
 // ── Wall Posts ──────────────────────────────────────────
 export function useWallPosts() {
@@ -12,7 +12,7 @@ export function useWallPosts() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const q = query(collection(db, 'wallPosts'), orderBy('createdAt', 'desc'));
+    const q = query(collection(db, 'wallPosts'), orderBy('createdAt', 'desc'), limit(50));
     const unsub = onSnapshot(q, snap => {
       setPosts(snap.docs.map(d => ({ id: d.id, ...d.data() } as WallPost)));
       setLoading(false);
@@ -37,7 +37,7 @@ export function useKudos() {
   const [kudos, setKudos] = useState<KudoEntry[]>([]);
 
   useEffect(() => {
-    const q = query(collection(db, 'kudos'), orderBy('createdAt', 'desc'));
+    const q = query(collection(db, 'kudos'), orderBy('createdAt', 'desc'), limit(30));
     const unsub = onSnapshot(q, snap => {
       setKudos(snap.docs.map(d => ({ id: d.id, ...d.data() } as KudoEntry)));
     });
@@ -56,7 +56,7 @@ export function usePolls() {
   const [polls, setPolls] = useState<Poll[]>([]);
 
   useEffect(() => {
-    const q = query(collection(db, 'polls'), orderBy('createdAt', 'desc'));
+    const q = query(collection(db, 'polls'), orderBy('createdAt', 'desc'), limit(10));
     const unsub = onSnapshot(q, snap => {
       setPolls(snap.docs.map(d => ({ id: d.id, ...d.data() } as Poll)));
     });
@@ -90,18 +90,19 @@ export function usePresence() {
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'presence'), snap => {
-      setSquad(snap.docs.map(d => d.data() as UserStatus));
+      setSquad(snap.docs.map(d => ({ ...d.data(), id: d.id } as UserStatus)));
     });
     return unsub;
   }, []);
 
-  const setStatus = async (status: UserStatus) => {
-    const ref = doc(db, 'presence', status.name);
-    await updateDoc(ref, { ...status, lastSeen: new Date().toISOString() }).catch(async () => {
-      // doc doesn't exist yet — create it
-      const { setDoc } = await import('firebase/firestore');
-      await setDoc(ref, { ...status, lastSeen: new Date().toISOString() });
-    });
+  const setStatus = async (userId: string, status: UserStatus) => {
+    const ref = doc(db, 'presence', userId);
+    const { setDoc, serverTimestamp } = await import('firebase/firestore');
+    await setDoc(ref, { 
+      ...status, 
+      lastSeen: new Date().toISOString(),
+      updatedAt: serverTimestamp() 
+    }, { merge: true });
   };
 
   return { squad, setStatus };
@@ -115,6 +116,7 @@ export function useCultureData() {
   const [facts, setFacts] = useState<CultureFact[]>([]);
   const [wotd, setWotd] = useState<WOTDItem[]>([]);
   const [icebreakers, setIcebreakers] = useState<string[]>([]);
+  const [dishes, setDishes] = useState<Dish[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -127,21 +129,84 @@ export function useCultureData() {
     const unsubIce = onSnapshot(collection(db, 'icebreakers'), snap => {
       setIcebreakers(snap.docs.map(d => d.data().text as string));
     });
+    const unsubDishes = onSnapshot(collection(db, 'dishes'), snap => {
+      setDishes(snap.docs.map(d => d.data() as Dish));
+    });
     
     setLoading(false);
-    return () => { unsubFacts(); unsubWotd(); unsubIce(); };
+    return () => { unsubFacts(); unsubWotd(); unsubIce(); unsubDishes(); };
   }, []);
 
-  const seed = async (data: { facts: CultureFact[], wotd: WOTDItem[], icebreakers: string[] }) => {
+  const seed = async (data: { 
+    facts: CultureFact[], 
+    wotd: WOTDItem[], 
+    icebreakers: string[], 
+    squadCodes: string[], 
+    dishes: Dish[],
+    quiz: QuizQuestion[]
+  }) => {
     const { writeBatch, doc: fireDoc } = await import('firebase/firestore');
     const batch = writeBatch(db);
     
     data.facts.forEach((f: CultureFact) => batch.set(fireDoc(collection(db, 'cultureFacts')), f));
     data.wotd.forEach((w: WOTDItem) => batch.set(fireDoc(collection(db, 'wotd')), w));
     data.icebreakers.forEach((i: string) => batch.set(fireDoc(collection(db, 'icebreakers')), { text: i }));
+    data.squadCodes.forEach((c: string) => batch.set(fireDoc(collection(db, 'squadCodes')), { code: c }));
+    data.dishes.forEach((d: Dish) => batch.set(fireDoc(collection(db, 'dishes')), d));
+    data.quiz.forEach((q: QuizQuestion) => batch.set(fireDoc(collection(db, 'quiz')), q));
     
     await batch.commit();
   };
 
-  return { facts, wotd, icebreakers, loading, seed };
+  return { facts, wotd, icebreakers, dishes, loading, seed };
+}
+
+// ── Quiz ────────────────────────────────────────────────
+export function useQuiz() {
+  const [questions, setQuestions] = useState<QuizQuestion[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'quiz'), snap => {
+      setQuestions(snap.docs.map(d => ({ ...d.data(), id: d.id } as QuizQuestion)));
+      setLoading(false);
+    });
+    return unsub;
+  }, []);
+
+  return { questions, loading };
+}
+
+// ── Squad Codes ──────────────────────────────────────────
+export function useSquadCodes() {
+  const [codes, setCodes] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'squadCodes'), snap => {
+      setCodes(snap.docs.map(d => d.data().code as string));
+      setLoading(false);
+    });
+    return unsub;
+  }, []);
+
+  const addCode = async (code: string) => {
+    const c = code.trim().toUpperCase();
+    if (!c) return;
+    await addDoc(collection(db, 'squadCodes'), { code: c });
+  };
+
+  const removeCode = async (code: string) => {
+    const q = query(collection(db, 'squadCodes'));
+    const unsub = onSnapshot(q, async (snap) => {
+      const docToDel = snap.docs.find(d => d.data().code === code);
+      if (docToDel) {
+        const { deleteDoc, doc: fireDoc } = await import('firebase/firestore');
+        await deleteDoc(fireDoc(db, 'squadCodes', docToDel.id));
+      }
+    });
+    unsub();
+  };
+
+  return { codes, loading, addCode, removeCode };
 }
