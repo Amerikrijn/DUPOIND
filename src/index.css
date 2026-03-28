@@ -791,6 +791,31 @@ header {
   .dashboard-grid { grid-template-columns: 1fr; }
 }
 
+/* ── Main Layout (Dashboard + Side Chat) ── */
+.main-content-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2rem;
+  width: 100%;
+}
+
+@media (min-width: 1200px) {
+  .main-content-layout {
+    grid-template-columns: 1fr 380px;
+    align-items: start;
+  }
+}
+
+.desktop-side-chat {
+  position: sticky;
+  top: 5.5rem;
+  height: calc(100vh - 8rem);
+}
+
+.desktop-side-chat > div {
+  height: 100%;
+}
+
 /* ── Mobile Bottom Nav ── */
 .mobile-bottom-nav {
   position: fixed;
@@ -803,8 +828,8 @@ header {
   justify-content: space-around;
   padding: 0.75rem 0.5rem;
   padding-bottom: env(safe-area-inset-bottom, 1rem);
-  z-index: 1000;
-  box-shadow: 0 -10px 30px rgba(0,0,0,0.5);
+  z-index: 9999;
+  box-shadow: 0 -10px 40px rgba(0,0,0,0.6);
   overflow-x: auto;
   scrollbar-width: none;
 }

@@ -54,7 +54,10 @@ export function useAutomatedCulture() {
         try {
           const res = await fetch(`https://date.nager.at/api/v3/NextPublicHolidays/${details.countryCode}`);
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          const data = await res.json();
+          const text = await res.text();
+          if (!text || text.trim().length === 0) throw new Error('Empty response');
+          
+          const data = JSON.parse(text);
           if (data && Array.isArray(data) && data.length > 0) {
             setHolidays(prev => ({ ...prev, [city]: data[0] }));
           }
@@ -109,8 +112,11 @@ export function useAutomatedCulture() {
           if (res.ok) {
             const data = await res.json();
             if (data && data.length > 0) {
-              const station = data.find((s: any) => s.favicon) || data[0];
-              setRadios(prev => ({ ...prev, [city]: { name: station.name, url: station.url_resolved, favicon: station.favicon } }));
+              const station = data.find((s: { favicon?: string }) => s.favicon) || data[0];
+              setRadios(prev => ({ 
+                ...prev, 
+                [city]: { name: station.name, url: station.url_resolved, favicon: station.favicon } 
+              }));
             }
           }
         } catch (e) { console.warn(`Radio: Skipping ${city} fetch.`, e); }

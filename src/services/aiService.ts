@@ -30,6 +30,7 @@ export async function getAssistantResponse(userMsg: string): Promise<string | nu
     // Function to try a specific model
     const tryModel = async (modelName: string) => {
       try {
+        console.log(`Dupo-Atlas: Trying AI model ${modelName}...`);
         const model = genAI.getGenerativeModel({ model: modelName });
         const result = await model.generateContent([
           SYSTEM_PROMPT,
@@ -37,25 +38,35 @@ export async function getAssistantResponse(userMsg: string): Promise<string | nu
         ]);
         const response = await result.response;
         return response.text();
-      } catch (e: any) {
-        console.warn(`Dupo-Atlas: ${modelName} failed`, e.message || e);
+      } catch (e: unknown) {
+        const errMsg = e instanceof Error ? e.message : String(e);
+        console.warn(`Dupo-Atlas: ${modelName} attempt failed:`, errMsg);
         return null;
       }
     };
 
-    // Attempt models in order
-    let text = await tryModel("gemini-1.5-flash");
-    if (!text) text = await tryModel("gemini-pro");
-    if (!text) text = await tryModel("gemini-1.5-flash-latest");
+    // Attempt models in a specific priority order for maximum compatibility
+    const modelsToTry = [
+      "gemini-1.5-flash",        // Standard
+      "gemini-pro",              // Legacy but stable
+      "gemini-1.5-flash-8b",     // High availability
+      "gemini-1.5-flash-latest"  // Sometimes required for newer keys
+    ];
 
-    if (!text) throw new Error("All models failed (404/Quota/Auth)");
+    let text = null;
+    for (const modelName of modelsToTry) {
+      text = await tryModel(modelName);
+      if (text) {
+        console.log(`Dupo-Atlas: ${modelName} success!`);
+        break;
+      }
+    }
+
+    if (!text) throw new Error("All Gemini models failed (404/Quota/Auth). Check GCP API library enablement.");
     return text;
   } catch (err: unknown) {
     if (err instanceof Error) {
       console.error("Dupo-Atlas AI Error:", err.message);
-      if (err.message.includes("404")) {
-        console.error("Dupo-Atlas: Model not found. Check if the 'Generative Language API' is enabled for this project.");
-      }
     }
     return null;
   }

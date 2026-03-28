@@ -767,7 +767,6 @@ export default function App() {
           <button className={`tab-btn ${activeTab === 'polls' ? 'active' : ''}`} onClick={() => setActiveTab('polls')}><BarChart2 size={18} /> <span className="tab-label">{t('polls')}</span></button>
           <button className={`tab-btn ${activeTab === 'quiz' ? 'active' : ''}`} onClick={() => setActiveTab('quiz')}><Trophy size={18} /> <span className="tab-label">{t('quiz')}</span></button>
           <button className={`tab-btn ${activeTab === 'ideas' ? 'active' : ''}`} onClick={() => setActiveTab('ideas')}><Lightbulb size={18} /> <span className="tab-label">{t('ideas')}</span></button>
-          <button className={`tab-btn ${activeTab === 'chat' ? 'active' : ''}`} onClick={() => setActiveTab('chat')}><MessageSquare size={18} /> <span className="tab-label">{t('global_chat')}</span></button>
         </nav>
         <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <select className="lang-select" value={lang} onChange={e => setLang(e.target.value as Lang)}>
@@ -794,19 +793,24 @@ export default function App() {
           </div>
         </div>
       </header>
-      <main>
-        {activeTab === 'dashboard' && <DashboardTab userName={user.name} userCity={user.city} userCityId={cityId} wotd={wotd} autoCulture={autoCulture} t={t} />}
-        {activeTab === 'connect' && <ConnectTab userName={user.name} userCityId={cityId} icebreakers={icebreakers} onPostToWall={postToWall} t={t} squad={squad} setStatus={setStatus} />}
-        {activeTab === 'wall' && <CultureWallTab userName={user.name} userCityId={cityId} t={t} />}
-        {activeTab === 'polls' && <PollsTab userName={user.name} userCityId={cityId} />}
-        {activeTab === 'quiz' && <QuizTab questions={quizQuestions} userName={user.name} userCityId={cityId} />}
-        {activeTab === 'ideas' && <IdeasTab userName={user.name} userCityId={cityId} />}
-        {activeTab === 'chat' && (
-          <div style={{ maxWidth: '800px', margin: '0 auto' }}>
-            <GlobalChat userName={user.name} />
-          </div>
-        )}
-      </main>
+      <div className="main-content-layout">
+        <main>
+          {activeTab === 'dashboard' && <DashboardTab userName={user.name} userCity={user.city} userCityId={cityId} wotd={wotd} autoCulture={autoCulture} t={t} />}
+          {activeTab === 'connect' && <ConnectTab userName={user.name} userCityId={cityId} icebreakers={icebreakers} onPostToWall={postToWall} t={t} squad={squad} setStatus={setStatus} />}
+          {activeTab === 'wall' && <CultureWallTab userName={user.name} userCityId={cityId} t={t} />}
+          {activeTab === 'polls' && <PollsTab userName={user.name} userCityId={cityId} />}
+          {activeTab === 'quiz' && <QuizTab questions={quizQuestions} userName={user.name} userCityId={cityId} />}
+          {activeTab === 'ideas' && <IdeasTab userName={user.name} userCityId={cityId} />}
+          {activeTab === 'chat' && (
+            <div className="mobile-only">
+              <GlobalChat userName={user.name} />
+            </div>
+          )}
+        </main>
+        <aside className="desktop-side-chat desktop-only">
+          <GlobalChat userName={user.name} />
+        </aside>
+      </div>
 
       <nav className="mobile-bottom-nav">
         <button className={`nav-item-mobile ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>

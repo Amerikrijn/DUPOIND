@@ -97,8 +97,15 @@ export function usePresence() {
       const docs = snap.docs.map(d => ({ ...d.data(), id: d.id } as UserStatus));
       // Filter for users seen in the last 5 minutes AND who are 'available'
       const active = docs.filter(s => {
-        const lastSeen = new Date(s.lastSeen).getTime();
-        return s.available && (now - lastSeen < 5 * 60 * 1000);
+        if (!s.lastSeen) return false;
+        try {
+          const lastSeenTime = new Date(s.lastSeen).getTime();
+          if (isNaN(lastSeenTime)) return false;
+          // Users are active if seen in last 10 minutes
+          return s.available && (now - lastSeenTime < 10 * 60 * 1000);
+        } catch {
+          return false;
+        }
       });
       setSquad(active);
     });
