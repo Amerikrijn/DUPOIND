@@ -632,9 +632,9 @@ export default function App() {
     return saved ? JSON.parse(saved) as { name: string; city: string } : null;
   });
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
-  const { codes, seed } = useSquadCodes();
+  const { codes } = useSquadCodes();
   const { questions: quizQuestions } = useQuiz();
-  const { facts, wotd, icebreakers } = useCultureData();
+  const { wotd, icebreakers, seed } = useCultureData();
   const autoCulture = useAutomatedCulture();
   const { lang, setLang, t } = useTranslation();
   const adminAuth = useAdminAuth();
