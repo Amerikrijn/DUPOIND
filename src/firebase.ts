@@ -2,16 +2,23 @@ import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 
-// ──────────────────────────────────────────────────────
-// 👉 GEKOPPELD AAN: culture-app-c3881 (Free Spark Plan)
-// ──────────────────────────────────────────────────────
+function requireEnv(name: keyof ImportMetaEnv): string {
+  const v = import.meta.env[name];
+  if (v === undefined || v === '') {
+    throw new Error(
+      `[DUPOIND] Missing ${String(name)}. Copy .env.example to .env and set Firebase variables.`
+    );
+  }
+  return v;
+}
+
 const firebaseConfig = {
-  apiKey: "AIzaSyAOmmT883w6NMVp4_2VkC_WACDkc_VrNlE",
-  authDomain: "culture-app-c3881.firebaseapp.com",
-  projectId: "culture-app-c3881",
-  storageBucket: "culture-app-c3881.firebasestorage.app",
-  messagingSenderId: "1036005101120",
-  appId: "1:1036005101120:web:3dcdfbc58609288a8459a5"
+  apiKey: requireEnv('VITE_FIREBASE_API_KEY'),
+  authDomain: requireEnv('VITE_FIREBASE_AUTH_DOMAIN'),
+  projectId: requireEnv('VITE_FIREBASE_PROJECT_ID'),
+  storageBucket: requireEnv('VITE_FIREBASE_STORAGE_BUCKET'),
+  messagingSenderId: requireEnv('VITE_FIREBASE_MESSAGING_SENDER_ID'),
+  appId: requireEnv('VITE_FIREBASE_APP_ID'),
 };
 
 const app = initializeApp(firebaseConfig);

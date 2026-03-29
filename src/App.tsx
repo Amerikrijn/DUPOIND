@@ -15,7 +15,8 @@ import type { Lang } from './hooks/useTranslation';
 import { useAdminAuth } from './hooks/useAdminAuth';
 import { getFullTranslation } from './utils/translate';
 import type { UserStatus, Dish } from './types';
-import { QUIZ_QUESTIONS, INITIAL_POLLS, MOODS } from './data';
+import { QUIZ_QUESTIONS, INITIAL_POLLS, getMoods, seedDefaults } from './data';
+import { getHubConfig, getCityById } from './config/appConfig';
 
 import { PollsTab } from './components/PollsTab';
 import { QuizTab } from './components/QuizTab';
@@ -29,14 +30,19 @@ import { SystemDashboard } from './components/SystemDashboard';
 // ─────────────────────────────────────────
 type Tab = 'dashboard' | 'connect' | 'wall' | 'quiz' | 'polls' | 'chat' | 'ideas';
 
-const CITIES = [
-  { id: 'utrecht', name: 'Utrecht', flag: '🇳🇱', timezone: 'Europe/Amsterdam' },
-  { id: 'lisbon',  name: 'Lisbon',  flag: '🇵🇹', timezone: 'Europe/Lisbon' },
-  { id: 'chennai', name: 'Chennai', flag: '🇮🇳', timezone: 'Asia/Kolkata' },
-];
+const CITIES = getHubConfig().cities.map((c) => ({
+  id: c.id,
+  name: c.displayName,
+  flag: c.flag,
+  timezone: c.timezone,
+}));
 
-function getCityFlag(cityId: string) { return CITIES.find(c => c.id === cityId)?.flag ?? '🌍'; }
-function getCityName(cityId: string) { return CITIES.find(c => c.id === cityId)?.name ?? cityId; }
+function getCityFlag(cityId: string) {
+  return getCityById(cityId)?.flag ?? '🌍';
+}
+function getCityName(cityId: string) {
+  return getCityById(cityId)?.displayName ?? cityId;
+}
 
 // ─────────────────────────────────────────
 // Auth Screen
@@ -47,10 +53,12 @@ function AuthScreen({ onLogin, setLang, t, adminAuth }: {
   t: (k: string) => string,
   adminAuth: ReturnType<typeof useAdminAuth>
 }) {
+  const hub = getHubConfig();
+  const namePrefix = hub.appName.slice(0, hub.appName.length - hub.appNameAccentPart.length);
   const { codes, loading: codesLoading } = useSquadCodes();
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
-  const [city, setCity] = useState('Utrecht');
+  const [city, setCity] = useState(hub.cities[0]?.displayName ?? '');
   const [step, setStep] = useState<'code' | 'profile' | 'admin'>('code');
   const [error, setError] = useState('');
   const [shake, setShake] = useState(false);
@@ -62,13 +70,19 @@ function AuthScreen({ onLogin, setLang, t, adminAuth }: {
   // IP Detection for Smart Language & Location
   useEffect(() => {
     const detect = async () => {
+      const hub = getHubConfig();
       try {
-        const res = await fetch('https://ipapi.co/json/');
+        const res = await fetch(hub.ipDetectionUrl);
         const data = await res.json();
-        if (data.country_code === 'NL') { setLang('NL'); setCity('Utrecht'); }
-        else if (data.country_code === 'PT') { setLang('PT'); setCity('Lisbon'); }
-        else if (data.country_code === 'IN') { setLang('TA'); setCity('Chennai'); }
-        else { setLang('EN'); }
+        const cc = data.country_code as string;
+        const cityId = hub.ipCountryToDefaultCity[cc as keyof typeof hub.ipCountryToDefaultCity];
+        if (cityId) {
+          const c = getCityById(cityId);
+          if (c) setCity(c.displayName);
+        }
+        const langPick = hub.ipCountryToLang[cc as keyof typeof hub.ipCountryToLang];
+        if (langPick) setLang(langPick as Lang);
+        else setLang('EN');
       } catch {
         console.warn('IP Detection failed, using defaults.');
       }
@@ -101,8 +115,8 @@ function AuthScreen({ onLogin, setLang, t, adminAuth }: {
       <div className="auth-card glass-panel">
         <div className="auth-logo">
           <div className="logo-icon-large"><Globe color="white" size={40} /></div>
-          <h1 className="auth-title">DUPO<span>IND</span></h1>
-          <p className="auth-subtitle">Utrecht · Lisbon · Chennai</p>
+          <h1 className="auth-title">{namePrefix}<span>{hub.appNameAccentPart}</span></h1>
+          <p className="auth-subtitle">{hub.tagline}</p>
         </div>
 
         {step === 'admin' ? (
@@ -140,9 +154,9 @@ function AuthScreen({ onLogin, setLang, t, adminAuth }: {
               <input className="auth-input" type="text" placeholder={t('name_placeholder')} value={name} onChange={e => setName(e.target.value)} /></div>
             <div className="auth-field"><label>{t('location')}</label>
               <select className="auth-input auth-select" value={city} onChange={e => setCity(e.target.value)}>
-                <option value="Utrecht">Utrecht</option>
-                <option value="Lisbon">Lisbon</option>
-                <option value="Chennai">Chennai</option>
+                {hub.cities.map((c) => (
+                  <option key={c.id} value={c.displayName}>{c.displayName}</option>
+                ))}
               </select></div>
             <button className="btn-auth" onClick={() => name.trim() && onLogin(name.trim(), city)} disabled={!name.trim()}>
               {t('join')} <Check size={18} />
@@ -424,13 +438,14 @@ interface ConnectProps {
   setStatus: (userId: string, status: UserStatus) => Promise<void>;
 }
 function ConnectTab({ userName, userCityId, icebreakers, onPostToWall, t, squad, setStatus }: ConnectProps) {
+  const moods = getMoods();
   const [userId] = useState(() => {
     let id = localStorage.getItem('dupoind_userId');
     if (!id) { id = Math.random().toString(36).substr(2, 9); localStorage.setItem('dupoind_userId', id); }
     return id;
   });
   const [available, setAvailable] = useState(false);
-  const [mood, setMood] = useState(MOODS[0]);
+  const [mood, setMood] = useState(moods[0] ?? '😄');
   const [spinning, setSpinning] = useState(false);
   const [crew, setCrew] = useState<{name: string, cityId: string}[]>([]);
   const [icebreaker, setIcebreaker] = useState('');
@@ -490,7 +505,7 @@ function ConnectTab({ userName, userCityId, icebreakers, onPostToWall, t, squad,
             <div className="mood-picker">
               <span className="mood-label">{t('status_prompt')}</span>
               <div className="mood-options">
-                {['😄','😊','😐','🫠','🔥','🎉'].map(m => (
+                {moods.map((m) => (
                   <button key={m} className={`mood-btn ${mood === m ? 'active' : ''}`} onClick={() => setMood(m)}>{m}</button>
                 ))}
               </div>
@@ -665,29 +680,43 @@ export default function App() {
   const hasPostedHoliday = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (!user) return;
-    Object.entries(autoCulture.holidays).forEach(async ([city, holiday]) => {
-      if (holiday && !hasPostedHoliday.current.has(holiday.date + city)) {
-        hasPostedHoliday.current.add(holiday.date + city);
-        
+    const assistant = getHubConfig().systemAssistantName;
+    let cancelled = false;
+    void (async () => {
+      for (const [city, holiday] of Object.entries(autoCulture.holidays)) {
+        if (!holiday || cancelled) continue;
+        const key = `${holiday.date}_${city}`;
+        if (hasPostedHoliday.current.has(key)) continue;
+        hasPostedHoliday.current.add(key);
+
         const hDate = new Date(holiday.date);
         const diff = Math.ceil((hDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-        const timing = diff === 0 ? t('today') : t('in_days').replace('{n}', diff.toString());
-        
-        const content = `📢 AUTO-ALERT: ${holiday.localName} (${timing}) in ${city.charAt(0).toUpperCase() + city.slice(1)}! 🎉`;
-        const trans = await getFullTranslation(content, 'nl'); 
-        
-        await sendMsg('DUPOIND Assistant', content, 'NL');
+        const timing = diff === 0 ? t('today') : t('in_days').replace('{n}', String(diff));
+
+        const cityLabel = getCityById(city)?.displayName ?? city;
+        const content = `📢 AUTO-ALERT: ${holiday.localName} (${timing}) in ${cityLabel}! 🎉`;
+        const trans = await getFullTranslation(content, 'nl');
+
+        await sendMsg(assistant, content, 'NL');
 
         const { addDoc, collection, serverTimestamp } = await import('firebase/firestore');
         const { db: firestore } = await import('./firebase');
         await addDoc(collection(firestore, 'wallPosts'), {
-          author: 'DUPOIND Assistant', city: 'System', cityId: 'system',
-          content, emoji: '🎉', likes: [],
+          author: assistant,
+          city: 'System',
+          cityId: 'system',
+          content,
+          emoji: '🎉',
+          likes: [],
           time: new Date().toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' }),
-          translations: trans, createdAt: serverTimestamp(),
+          translations: trans,
+          createdAt: serverTimestamp(),
         });
       }
-    });
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [autoCulture.holidays, user, t, sendMsg]);
 
   const handleLogin = (name: string, city: string) => {
@@ -697,30 +726,18 @@ export default function App() {
 
   const handleSeed = async () => {
     if (!confirm('Dit voegt standaard data toe aan Firestore. Doorgaan?')) return;
-    const initialFacts = [
-      { cityId: 'utrecht', flag: '🇳🇱', city: 'Utrecht', fact: 'Utrecht heeft de grootste fietsenstalling ter wereld! 🚲' },
-      { cityId: 'lisbon', flag: '🇵🇹', city: 'Lisbon', fact: 'Lissabon is ouder dan Rome. 🏛️' },
-      { cityId: 'chennai', flag: '🇮🇳', city: 'Chennai', fact: 'Chennai is de "Detroit van Zuid-Azië" door de auto-industrie. 🚗' }
-    ];
-    const initialWotd = [
-      { lang: 'NL', word: 'Gezellig', translation: 'Cozy atmosphere', useCase: '"Echt gezellig!"' },
-      { lang: 'PT', word: 'Saudade', translation: 'Deep longing', useCase: '"Saudade de Lisbon."' }
-    ];
-    const initialIce = ['Wat is je favoriete vakantiebestemming?', 'Bier of Wijn?', 'Koffie of Thee?'];
-    const initialCodes = ['DUPOIND', 'UTRECHT', 'LISBON1', 'CHENNAI'];
-    const initialDishes: Dish[] = [
-      { cityId: 'utrecht', name: 'Stamppot', description: 'Traditioneel Hollands prakkie.', image: '🍲', flag: '🇳🇱' },
-      { cityId: 'lisbon', name: 'Pastel de Nata', description: 'Heerlijk bladerdeeggebakje met room.', image: '🧁', flag: '🇵🇹' },
-      { cityId: 'chennai', name: 'Masala Dosa', description: 'Knapperige rijstpannenkoek met aardappel.', image: '🌯', flag: '🇮🇳' }
-    ];
-    const initialPolls = INITIAL_POLLS.map(p => ({ ...p, createdAt: new Date().toISOString() }));
-    
-    await seed({ 
-      facts: initialFacts, wotd: initialWotd, icebreakers: initialIce, 
-      squadCodes: initialCodes, dishes: initialDishes, quiz: QUIZ_QUESTIONS 
+
+    const initialPolls = INITIAL_POLLS.map((p) => ({ ...p, createdAt: new Date().toISOString() }));
+
+    await seed({
+      facts: seedDefaults.seedFacts,
+      wotd: seedDefaults.seedWotd,
+      icebreakers: seedDefaults.seedIcebreakers,
+      squadCodes: seedDefaults.seedSquadCodes,
+      dishes: seedDefaults.seedDishes as Dish[],
+      quiz: QUIZ_QUESTIONS,
     });
 
-    // Also seed initial polls if needed
     const { addDoc, collection } = await import('firebase/firestore');
     const { db } = await import('./firebase');
     for (const poll of initialPolls) {
@@ -743,6 +760,8 @@ export default function App() {
       {!user ? (
         <AuthScreen onLogin={handleLogin} setLang={setLang} t={t} adminAuth={adminAuth} />
       ) : (() => {
+        const hb = getHubConfig();
+        const logoPrefix = hb.appName.slice(0, hb.appName.length - hb.appNameAccentPart.length);
         const cityId = user.city.toLowerCase();
         const postToWall = async (content: string, emoji: string) => {
           const trans = await getFullTranslation(content);
@@ -759,7 +778,7 @@ export default function App() {
         return (
           <div className="app-container">
           <header>
-            <div className="logo-container"><div className="logo-icon"><Globe color="white" size={22} /></div><div className="logo-text">DUPO<span>IND</span></div></div>
+            <div className="logo-container"><div className="logo-icon"><Globe color="white" size={22} /></div><div className="logo-text">{logoPrefix}<span>{hb.appNameAccentPart}</span></div></div>
             <nav className="tab-nav desktop-only">
           <button className={`tab-btn ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}><Home size={18} /> <span className="tab-label">{t('dashboard')}</span></button>
           <button className={`tab-btn ${activeTab === 'connect' ? 'active' : ''}`} onClick={() => setActiveTab('connect')}><Shuffle size={18} /> <span className="tab-label">{t('connect')}</span></button>

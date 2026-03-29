@@ -1,0 +1,70 @@
+{
+  "appName": "DUPOIND",
+  "appNameAccentPart": "IND",
+  "tagline": "Utrecht · Lisbon · Chennai",
+  "assistantName": "Dupo-Atlas",
+  "systemAssistantName": "DUPOIND Assistant",
+  "ipDetectionUrl": "https://ipapi.co/json/",
+  "moods": ["😄", "😊", "😐", "🫠", "🔥", "🎉"],
+  "mealDbAreas": ["Dutch", "Portuguese", "Indian"],
+  "livingBrainIntervalMs": 600000,
+  "cities": [
+    {
+      "id": "utrecht",
+      "displayName": "Utrecht",
+      "flag": "🇳🇱",
+      "timezone": "Europe/Amsterdam",
+      "countryCode": "NL",
+      "countryName": "Netherlands",
+      "lat": 52.09,
+      "lng": 5.12,
+      "wikipediaTitle": "Utrecht",
+      "accentColor": "#f97316"
+    },
+    {
+      "id": "lisbon",
+      "displayName": "Lisbon",
+      "flag": "🇵🇹",
+      "timezone": "Europe/Lisbon",
+      "countryCode": "PT",
+      "countryName": "Portugal",
+      "lat": 38.72,
+      "lng": -9.14,
+      "wikipediaTitle": "Lisbon",
+      "accentColor": "#eab308"
+    },
+    {
+      "id": "chennai",
+      "displayName": "Chennai",
+      "flag": "🇮🇳",
+      "timezone": "Asia/Kolkata",
+      "countryCode": "IN",
+      "countryName": "India",
+      "lat": 13.08,
+      "lng": 80.27,
+      "wikipediaTitle": "Chennai",
+      "accentColor": "#84cc16"
+    }
+  ],
+  "newsFeeds": {
+    "utrecht": "https://api.rss2json.com/v1/api.json?rss_url=https%3A%2F%2Fwww.duic.nl%2Ffeed%2F",
+    "lisbon": "https://api.rss2json.com/v1/api.json?rss_url=https%3A%2F%2Fwww.publico.pt%2Frss%2Flocal%2Flisboa",
+    "chennai": "https://api.rss2json.com/v1/api.json?rss_url=https%3A%2F%2Fwww.thehindu.com%2Fnews%2Fcities%2Fchennai%2Ffeeder%2Fdefault.rss"
+  },
+  "ipCountryToDefaultCity": {
+    "NL": "utrecht",
+    "PT": "lisbon",
+    "IN": "chennai"
+  },
+  "ipCountryToLang": {
+    "NL": "NL",
+    "PT": "PT",
+    "IN": "TA"
+  },
+  "langBadgeMap": {
+    "NL": "utrecht",
+    "PT": "lisbon",
+    "TA": "chennai",
+    "EN": "utrecht"
+  }
+}

@@ -3,8 +3,10 @@ import { Send, Zap } from 'lucide-react';
 import { useGlobalChat } from '../hooks/useFirestore';
 import { useTranslation } from '../hooks/useTranslation';
 import { getAssistantResponse } from '../services/aiService';
+import { getHubConfig } from '../config/appConfig';
 
 export function GlobalChat({ userName }: { userName: string }) {
+  const assistantName = getHubConfig().assistantName;
   const { messages, sendMsg } = useGlobalChat();
   const { lang: currentLang, t } = useTranslation();
   const [text, setText] = useState('');
@@ -54,8 +56,9 @@ export function GlobalChat({ userName }: { userName: string }) {
         }, 1000);
       } else {
         // Fallback for missing API Key or error
-        const fallback = "🧠 I'm Dupo-Atlas! I'm currently in 'Offline Mode' (missing API Key), but I still know everything about Utrecht, Lisbon, and Chennai!";
-        await sendMsg('Dupo-Atlas', fallback, currentLang);
+        const tagline = getHubConfig().tagline;
+        const fallback = `🧠 I'm ${assistantName}! I'm in offline mode (no API key). Ask about our hubs: ${tagline}.`;
+        await sendMsg(assistantName, fallback, currentLang);
         setIsBotThinking(false);
         isBotTyping.current = false;
       }
@@ -86,7 +89,7 @@ export function GlobalChat({ userName }: { userName: string }) {
       <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem', background: 'rgba(0,0,0,0.1)' }}>
         {messages.map((msg) => {
           const isMe = msg.author === userName;
-          const isBot = msg.author === 'Dupo-Atlas';
+          const isBot = msg.author === assistantName;
           const displayLang = currentLang.toLowerCase() as 'nl' | 'pt' | 'ta';
           const translatedText = msg.trans?.[displayLang] || msg.text;
 
