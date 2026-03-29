@@ -1,12 +1,8 @@
 import { useState, useEffect } from 'react';
 import { getHubConfig } from '../config/appConfig';
 import { fetchNextPublicHoliday, type Holiday } from '../services/nagerHolidays';
-import {
-  fetchOnThisDayHighlight,
-  wikiLangFromUi,
-  type OnThisDayHighlight,
-} from '../services/wikipediaOnThisDay';
-import type { Lang } from './useTranslation';
+import { fetchOnThisDayHighlight, type OnThisDayHighlight } from '../services/wikipediaOnThisDay';
+import { getUtcYmd, stableHash } from '../utils/hubDailySeed';
 
 export type { Holiday };
 
@@ -36,7 +32,10 @@ export interface RadioStation {
   favicon: string;
 }
 
-export function useAutomatedCulture(uiLang: Lang = 'EN') {
+const ROTATE_MS = 15 * 60 * 1000;
+
+/** Holidays, city facts, sun cycles — not tied to UI language. */
+export function useAutomatedCulture() {
   const [holidays, setHolidays] = useState<Record<string, Holiday | null>>({});
   const [facts, setFacts] = useState<Record<string, CityFact | null>>({});
   const [meal, setMeal] = useState<MealInspiration | null>(null);
@@ -44,11 +43,20 @@ export function useAutomatedCulture(uiLang: Lang = 'EN') {
   const [radios, setRadios] = useState<Record<string, RadioStation | null>>({});
   const [onThisDay, setOnThisDay] = useState<OnThisDayHighlight | null>(null);
   const [loading, setLoading] = useState(true);
+  const [utcDayKey, setUtcDayKey] = useState(() => getUtcYmd());
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      const next = getUtcYmd();
+      setUtcDayKey((k) => (k === next ? k : next));
+    }, 60_000);
+    return () => window.clearInterval(id);
+  }, []);
 
   useEffect(() => {
     const cfg = getHubConfig();
 
-    async function fetchData() {
+    async function fetchCityRow() {
       const fetchPromises = cfg.cities.map(async (city) => {
         const details = city;
 
@@ -100,61 +108,71 @@ export function useAutomatedCulture(uiLang: Lang = 'EN') {
         } catch {
           setDayCycles((prev) => ({ ...prev, [city.id]: null }));
         }
-
       });
 
-      const fetchMeal = async () => {
-        try {
-          const areas = cfg.mealDbAreas;
-          const randomArea = areas[Math.floor(Math.random() * areas.length)];
+      await Promise.all(fetchPromises);
+      setLoading(false);
+    }
+
+    void fetchCityRow();
+  }, []);
+
+  useEffect(() => {
+    const cfg = getHubConfig();
+
+    async function fetchSharedDaily() {
+      try {
+        const areas = cfg.mealDbAreas;
+        if (areas.length > 0) {
+          const areaIdx = stableHash(`dupoind:meal:area:${utcDayKey}`) % areas.length;
+          const area = areas[areaIdx];
           const filterRes = await fetch(
-            `https://www.themealdb.com/api/json/v1/1/filter.php?a=${encodeURIComponent(randomArea)}`
+            `https://www.themealdb.com/api/json/v1/1/filter.php?a=${encodeURIComponent(area)}`
           );
           if (filterRes.ok) {
-            const filterData = await filterRes.json();
-            if (filterData.meals && filterData.meals.length > 0) {
-              const randomMeal = filterData.meals[Math.floor(Math.random() * filterData.meals.length)];
+            const filterData = (await filterRes.json()) as { meals?: { idMeal: string }[] };
+            const list = filterData.meals;
+            if (list && list.length > 0) {
+              const mealIdx = stableHash(`dupoind:meal:pick:${utcDayKey}`) % list.length;
+              const picked = list[mealIdx];
               const mealRes = await fetch(
-                `https://www.themealdb.com/api/json/v1/1/lookup.php?i=${randomMeal.idMeal}`
+                `https://www.themealdb.com/api/json/v1/1/lookup.php?i=${picked.idMeal}`
               );
-              const mealData = await mealRes.json();
-              if (mealData.meals && mealData.meals.length > 0) {
+              const mealData = (await mealRes.json()) as { meals?: MealInspiration[] };
+              if (mealData.meals?.length) {
                 setMeal(mealData.meals[0]);
               }
             }
           }
-        } catch {
-          /* meal optional */
         }
-      };
+      } catch {
+        /* meal optional */
+      }
 
-      await Promise.all([...fetchPromises, fetchMeal()]);
       try {
-        const otd = await fetchOnThisDayHighlight(wikiLangFromUi(uiLang));
+        const otd = await fetchOnThisDayHighlight('en');
         setOnThisDay(otd);
       } catch {
         setOnThisDay(null);
       }
-      setLoading(false);
     }
 
-    fetchData();
-  }, [uiLang]);
+    void fetchSharedDaily();
+  }, [utcDayKey]);
 
-  /** Radio: pick random stations from a larger pool; refresh on an interval so the row stays fresh. */
+  /** Same station for everyone in the same UTC 15-minute window (deterministic pool pick). */
   useEffect(() => {
     const cfg = getHubConfig();
     let cancelled = false;
-    const ROTATE_MS = 15 * 60 * 1000;
 
     async function refreshRadios() {
+      const slot = Math.floor(Date.now() / ROTATE_MS);
       await Promise.all(
         cfg.cities.map(async (city) => {
           const name = city.countryName;
-          const offset = Math.floor(Math.random() * 8) * 10;
           try {
             const res = await fetch(
-              `https://de1.api.radio-browser.info/json/stations/bycountry/${encodeURIComponent(name)}?limit=50&offset=${offset}&order=clickcount&reverse=true`
+              `https://de1.api.radio-browser.info/json/stations/bycountry/${encodeURIComponent(name)}?limit=50&offset=0&order=clickcount&reverse=true`
             );
             if (!res.ok) return;
             const data = (await res.json()) as {
@@ -166,7 +184,8 @@ export function useAutomatedCulture(uiLang: Lang = 'EN') {
             if (!data?.length || cancelled) return;
             const usable = data.filter((s) => s.url_resolved || s.url);
             const pool = usable.length > 0 ? usable : data;
-            const station = pool[Math.floor(Math.random() * pool.length)];
+            const idx = stableHash(`dupoind:radio:${utcDayKey}:${city.id}:${slot}`) % pool.length;
+            const station = pool[idx];
             setRadios((prev) => ({
               ...prev,
               [city.id]: {
@@ -190,7 +209,7 @@ export function useAutomatedCulture(uiLang: Lang = 'EN') {
       cancelled = true;
       window.clearInterval(id);
     };
-  }, []);
+  }, [utcDayKey]);
 
   return { holidays, facts, meal, dayCycles, radios, loading, onThisDay };
 }

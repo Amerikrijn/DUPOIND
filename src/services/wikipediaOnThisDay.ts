@@ -1,8 +1,9 @@
 /**
- * Wikimedia "On this day" feed — no API key, changes daily per calendar date.
+ * Wikimedia "On this day" feed — no API key, changes daily per calendar date (UTC).
  * @see https://api.wikimedia.org/wiki/Feed_API/Get_feed_of_onthisday_events
  */
 import type { Lang } from '../hooks/useTranslation';
+import { utcDateSeed } from '../utils/hubDailySeed';
 
 export type WikiLangCode = 'en' | 'nl' | 'pt' | 'ta';
 
@@ -36,8 +37,8 @@ function pickEventIndex(total: number, seed: number): number {
 
 export async function fetchOnThisDayHighlight(wikiLang: WikiLangCode): Promise<OnThisDayHighlight | null> {
   const d = new Date();
-  const m = pad2(d.getMonth() + 1);
-  const day = pad2(d.getDate());
+  const m = pad2(d.getUTCMonth() + 1);
+  const day = pad2(d.getUTCDate());
   const url = `https://api.wikimedia.org/feed/v1/wikipedia/${wikiLang}/onthisday/events/${m}/${day}`;
 
   let res = await fetch(url);
@@ -62,7 +63,7 @@ export async function fetchOnThisDayHighlight(wikiLang: WikiLangCode): Promise<O
   const events = data.events;
   if (!events?.length) return null;
 
-  const seed = d.getFullYear() + (d.getMonth() + 1) * 31 + d.getDate();
+  const seed = utcDateSeed(d);
   const ev = events[pickEventIndex(events.length, seed)];
   if (!ev?.text) return null;
 

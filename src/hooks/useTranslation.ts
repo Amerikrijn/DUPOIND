@@ -113,6 +113,37 @@ const DICTIONARY: Record<Lang, Record<string, string>> = {
     ai_err_safety_blocked: 'Het antwoord werd geblokkeerd door veiligheidsfilters. Probeer een andere formulering.',
     ai_err_network: 'Netwerkfout bij Google. Controleer verbinding en probeer opnieuw.',
     ai_err_unknown: 'AI kon geen antwoord geven. Probeer later opnieuw.',
+    wikipedia_link: 'Wikipedia →',
+    update_available: 'Er is een nieuwere versie van de app.',
+    update_refresh: 'Ververs nu',
+    roulette_you_self: 'Jij',
+    kudo_to_arrow: '→ {to}',
+    connect_available_now: 'Nu beschikbaar',
+    roulette_desc:
+      "Verbind willekeurig 3 collega's uit de drie locaties voor een leuke culturele uitwisseling!",
+    roulette_connecting: 'Verbinden...',
+    roulette_spin: 'Draai de roulette!',
+    roulette_crew_title: 'Jouw Culture Crew',
+    icebreaker_today_label: 'Icebreaker van vandaag',
+    roulette_answer_label: 'Schrijf jouw antwoord — dit komt op de Culture Wall.',
+    roulette_answer_placeholder: 'Jouw antwoord...',
+    roulette_post_wall: 'Post op Culture Wall',
+    roulette_posted_confirm: 'Gepost! 🌍',
+    wall_share_placeholder: 'Deel een moment — schrijf in jouw eigen taal! 🌐',
+    wall_post_translating: 'Vertalen...',
+    wall_post_button: 'Post & vertaal naar alle talen',
+    wall_api_badge: '🌐 API Live',
+    kudo_placeholder_to: 'Naar wie? (bijv. naam — stad)',
+    kudo_placeholder_message: 'Schrijf in jouw eigen taal 🌐',
+    kudo_translating: 'Vertalen...',
+    kudo_submit_btn: 'Verstuur en vertaal',
+    fallback_weather_label: '⛅ Live weer (Open-Meteo)',
+    fallback_otd_headline: '📚 Vandaag (Wikipedia)',
+    fallback_gemini_tip:
+      '✨ Tip: zet “Generative Language API” aan in Google Cloud voor volledige AI-antwoorden van {name}.',
+    fallback_otd_offline:
+      '📚 Geen live Wikipedia-tip geladen. Controleer je verbinding. Voor AI: schakel de Generative Language API in (Google Cloud → Library).',
+    roulette_wall_prefix: '🎲 Roulette-antwoord:',
   },
   EN: {
     dashboard: 'Dashboard',
@@ -218,6 +249,36 @@ const DICTIONARY: Record<Lang, Record<string, string>> = {
     ai_err_safety_blocked: 'Response blocked by safety filters. Try rephrasing.',
     ai_err_network: 'Network error talking to Google. Check connection and retry.',
     ai_err_unknown: 'AI could not answer. Try again later.',
+    wikipedia_link: 'Wikipedia →',
+    update_available: 'A newer version of the app is available.',
+    update_refresh: 'Refresh now',
+    roulette_you_self: 'You',
+    kudo_to_arrow: '→ {to}',
+    connect_available_now: 'Available now',
+    roulette_desc: 'Connect 3 random colleagues across the three hubs for a quick cultural exchange!',
+    roulette_connecting: 'Connecting...',
+    roulette_spin: 'Spin the roulette!',
+    roulette_crew_title: 'Your culture crew',
+    icebreaker_today_label: "Today's icebreaker",
+    roulette_answer_label: 'Write your answer — it will be posted on the Culture Wall.',
+    roulette_answer_placeholder: 'Your answer...',
+    roulette_post_wall: 'Post to Culture Wall',
+    roulette_posted_confirm: 'Posted! 🌍',
+    wall_share_placeholder: 'Share a moment — write in your own language! 🌐',
+    wall_post_translating: 'Translating...',
+    wall_post_button: 'Post & translate to all languages',
+    wall_api_badge: '🌐 API Live',
+    kudo_placeholder_to: 'To whom? (e.g. name — city)',
+    kudo_placeholder_message: 'Write in your own language 🌐',
+    kudo_translating: 'Translating...',
+    kudo_submit_btn: 'Send & translate',
+    fallback_weather_label: '⛅ Live weather (Open-Meteo)',
+    fallback_otd_headline: '📚 On this day (Wikipedia)',
+    fallback_gemini_tip:
+      '✨ Enable “Generative Language API” in Google Cloud for full AI replies from {name}.',
+    fallback_otd_offline:
+      '📚 Could not load a live Wikipedia tip. Check your connection. For AI: enable Generative Language API in Google Cloud → Library.',
+    roulette_wall_prefix: '🎲 Roulette answer:',
   },
   PT: {
     dashboard: 'Painel',
@@ -326,6 +387,36 @@ const DICTIONARY: Record<Lang, Record<string, string>> = {
     ai_err_safety_blocked: 'Resposta bloqueada por filtros de segurança. Reformule.',
     ai_err_network: 'Erro de rede com o Google. Tente de novo.',
     ai_err_unknown: 'A IA não respondeu. Tente mais tarde.',
+    wikipedia_link: 'Wikipedia →',
+    update_available: 'Há uma versão mais recente da app.',
+    update_refresh: 'Atualizar agora',
+    roulette_you_self: 'Tu',
+    kudo_to_arrow: '→ {to}',
+    connect_available_now: 'Disponível agora',
+    roulette_desc: 'Liga 3 colegas ao acaso nos três hubs para uma troca cultural rápida!',
+    roulette_connecting: 'A ligar...',
+    roulette_spin: 'Gira a roleta!',
+    roulette_crew_title: 'A tua culture crew',
+    icebreaker_today_label: 'Icebreaker de hoje',
+    roulette_answer_label: 'Escreve a tua resposta — vai para a Culture Wall.',
+    roulette_answer_placeholder: 'A tua resposta...',
+    roulette_post_wall: 'Publicar na Culture Wall',
+    roulette_posted_confirm: 'Publicado! 🌍',
+    wall_share_placeholder: 'Partilha um momento — escreve na tua língua! 🌐',
+    wall_post_translating: 'A traduzir...',
+    wall_post_button: 'Publicar e traduzir para todas as línguas',
+    wall_api_badge: '🌐 API Live',
+    kudo_placeholder_to: 'Para quem? (ex. nome — cidade)',
+    kudo_placeholder_message: 'Escreve na tua língua 🌐',
+    kudo_translating: 'A traduzir...',
+    kudo_submit_btn: 'Enviar e traduzir',
+    fallback_weather_label: '⛅ Tempo ao vivo (Open-Meteo)',
+    fallback_otd_headline: '📚 Hoje (Wikipedia)',
+    fallback_gemini_tip:
+      '✨ Ativa a “Generative Language API” no Google Cloud para respostas completas de {name}.',
+    fallback_otd_offline:
+      '📚 Não foi possível carregar a dica da Wikipedia. Verifica a ligação. Para IA: ativa a Generative Language API no Google Cloud → Library.',
+    roulette_wall_prefix: '🎲 Resposta da roleta:',
   },
   TA: {
     dashboard: 'டாஷ்போர்டு',
@@ -435,8 +526,50 @@ const DICTIONARY: Record<Lang, Record<string, string>> = {
     ai_err_safety_blocked: 'பாதுகாப்பு வடிகட்டி பதிலைத் தடுத்தது. வேறு வார்த்தைகளில் முயலவும்.',
     ai_err_network: 'Google உடன் பிணைப்பு பிழை. மீண்டும் முயலவும்.',
     ai_err_unknown: 'AI பதிலளிக்கவில்லை. பின்னர் முயலவும்.',
+    wikipedia_link: 'விக்கிப்பீடியா →',
+    update_available: 'பயன்பாட்டின் புதிய பதிப்பு உள்ளது.',
+    update_refresh: 'இப்போது புதுப்பிக்கவும்',
+    roulette_you_self: 'நீங்கள்',
+    kudo_to_arrow: '→ {to}',
+    connect_available_now: 'இப்போது கிடைக்கிறது',
+    roulette_desc: 'மூன்று மையங்களிலிருந்து 3 சகாக்களை எதிர்பாராதவிதமாக இணைத்து கலாச்சார பகிர்வு செய்யுங்கள்!',
+    roulette_connecting: 'இணைக்கிறது...',
+    roulette_spin: 'ரவுலட்டை சுழற்றுங்கள்!',
+    roulette_crew_title: 'உங்கள் கலாச்சார குழு',
+    icebreaker_today_label: 'இன்றைய Icebreaker',
+    roulette_answer_label: 'உங்கள் பதிலை எழுதுங்கள் — Culture Wall-ல் பதிவாகும்.',
+    roulette_answer_placeholder: 'உங்கள் பதில்...',
+    roulette_post_wall: 'Culture Wall-ல் பதிவு செய்',
+    roulette_posted_confirm: 'பதிவானது! 🌍',
+    wall_share_placeholder: 'ஒரு தருணத்தைப் பகிருங்கள் — உங்கள் மொழியில் எழுதுங்கள்! 🌐',
+    wall_post_translating: 'மொழிபெயர்கிறது...',
+    wall_post_button: 'பதிவு & அனைத்து மொழிகளிலும் மொழிபெயர்',
+    wall_api_badge: '🌐 API Live',
+    kudo_placeholder_to: 'யாருக்கு? (எ.கா. பெயர் — நகரம்)',
+    kudo_placeholder_message: 'உங்கள் மொழியில் எழுதுங்கள் 🌐',
+    kudo_translating: 'மொழிபெயர்கிறது...',
+    kudo_submit_btn: 'அனுப்பு & மொழிபெயர்',
+    fallback_weather_label: '⛅ நேரடி வானிலை (Open-Meteo)',
+    fallback_otd_headline: '📚 இன்று (விக்கிப்பீடியா)',
+    fallback_gemini_tip:
+      '✨ முழு AI பதில்களுக்கு Google Cloud-ல் “Generative Language API”-யை இயக்கவும் ({name}).',
+    fallback_otd_offline:
+      '📚 விக்கிப்பீடியா உதவி ஏற்ற முடியவில்லை. இணைப்பைச் சரிபார்க்கவும். AI-க்கு Google Cloud-ல் Generative Language API-யை இயக்கவும்.',
+    roulette_wall_prefix: '🎲 ரவுலட் பதில்:',
   }
 };
+
+/** Static copy without hook — for banners, fallbacks, and components outside providers. */
+export function translateStatic(lang: Lang, key: string, params?: Record<string, string | number>): string {
+  const row = DICTIONARY[lang] ?? DICTIONARY.EN;
+  let str = row[key] ?? DICTIONARY.EN[key] ?? key;
+  if (params) {
+    Object.keys(params).forEach((p) => {
+      str = str.replace(`{${p}}`, String(params[p]));
+    });
+  }
+  return str;
+}
 
 export function useTranslation() {
   const [lang, setLang] = useState<Lang>(() => {
@@ -454,7 +587,7 @@ export function useTranslation() {
   }, [lang]);
 
   const t = useCallback((key: string, params?: Record<string, string | number>) => {
-    let str = DICTIONARY[lang][key] || key;
+    let str = DICTIONARY[lang][key] ?? DICTIONARY.EN[key] ?? key;
     if (params) {
       Object.keys(params).forEach(p => {
         str = str.replace(`{${p}}`, String(params[p]));

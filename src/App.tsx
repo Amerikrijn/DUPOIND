@@ -15,7 +15,8 @@ import type { OnThisDayHighlight } from './services/wikipediaOnThisDay';
 import { useTranslation } from './hooks/useTranslation';
 import type { Lang } from './hooks/useTranslation';
 import { useAdminAuth } from './hooks/useAdminAuth';
-import { getFullTranslation } from './utils/translate';
+import { getFullTranslation, translateText, uiLangToTarget } from './utils/translate';
+import { UpdateAvailableBanner } from './components/UpdateAvailableBanner';
 import type { UserStatus, Dish } from './types';
 import { QUIZ_QUESTIONS, getMoods, seedDefaults } from './data';
 import { getHubConfig, getCityById } from './config/appConfig';
@@ -48,6 +49,24 @@ function getCityName(cityId: string) {
 }
 
 const HOLIDAY_POSTED_LS = 'dupoind_posted_holidays_v1';
+/** Name + hub city — localStorage so users stay signed in after refresh/new tab (not sessionStorage). */
+const USER_PROFILE_LS = 'dupoind_user';
+
+function loadPersistedUserProfile(): { name: string; city: string } | null {
+  try {
+    const fromLs = localStorage.getItem(USER_PROFILE_LS);
+    if (fromLs) return JSON.parse(fromLs) as { name: string; city: string };
+    const fromSs = sessionStorage.getItem(USER_PROFILE_LS);
+    if (fromSs) {
+      localStorage.setItem(USER_PROFILE_LS, fromSs);
+      sessionStorage.removeItem(USER_PROFILE_LS);
+      return JSON.parse(fromSs) as { name: string; city: string };
+    }
+  } catch {
+    /* ignore corrupt */
+  }
+  return null;
+}
 
 function readPostedHolidayKeys(): Set<string> {
   try {
@@ -361,7 +380,8 @@ interface DashboardProps {
   wotd: { lang: string; word: string; translation: string; useCase: string }[]; 
   icebreakers: string[];
   autoCulture: ReturnType<typeof useAutomatedCulture>;
-  t: (k: string) => string;
+  t: (k: string, params?: Record<string, string | number>) => string;
+  lang: Lang;
 }
 
 function resolveTodayHero(
@@ -370,13 +390,16 @@ function resolveTodayHero(
   meal: MealInspiration | null,
   phrase: { word: string; translation: string } | undefined,
   fact: CityFact | null | undefined,
-  t: (k: string) => string,
+  t: (k: string, params?: Record<string, string | number>) => string,
+  wikipediaLinkLabel: string,
 ): { heroSlot: number; heroContent: ReactNode } {
   const tryCalendar = () =>
     ontd ? (
       <>
         <p className="today-readable">{ontd.text}</p>
-        <a className="today-link" href={ontd.url} target="_blank" rel="noreferrer">Wikipedia →</a>
+        <a className="today-link" href={ontd.url} target="_blank" rel="noreferrer">
+          {wikipediaLinkLabel}
+        </a>
       </>
     ) : null;
   const tryFood = () =>
@@ -412,7 +435,7 @@ function resolveTodayHero(
           </p>
           {fact.content_urls && (
             <a className="today-link" href={fact.content_urls.desktop.page} target="_blank" rel="noreferrer">
-              Wikipedia →
+              {wikipediaLinkLabel}
             </a>
           )}
         </div>
@@ -430,7 +453,7 @@ function resolveTodayHero(
   return { heroSlot: daySlot, heroContent: <p className="auth-hint">{t('loading')}</p> };
 }
 
-function DashboardTab({ userName, userCity, userCityId, wotd, icebreakers, autoCulture, t }: DashboardProps) {
+function DashboardTab({ userName, userCity, userCityId, wotd, icebreakers, autoCulture, t, lang }: DashboardProps) {
   const { kudos, addKudo } = useKudos();
   const [showForm, setShowForm] = useState(false);
   const [newKudo, setNewKudo] = useState({ to: '', message: '' });
@@ -438,8 +461,58 @@ function DashboardTab({ userName, userCity, userCityId, wotd, icebreakers, autoC
 
   const daySlot = useMemo(() => {
     const d = new Date();
-    return (d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate()) % 4;
+    return (d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate()) % 4;
   }, []);
+
+  const ontd = autoCulture.onThisDay;
+  const meal = autoCulture.meal;
+  const targetLang = uiLangToTarget(lang);
+
+  const ontdFetchId = `${ontd?.text ?? ''}|${targetLang}`;
+  const mealFetchId = `${meal?.strMeal ?? ''}|${targetLang}`;
+
+  const [onThisDayResult, setOnThisDayResult] = useState<{ id: string; text: string } | null>(null);
+  const [mealTitleResult, setMealTitleResult] = useState<{ id: string; text: string } | null>(null);
+
+  useEffect(() => {
+    if (!ontd?.text || targetLang === 'en') return;
+    let cancelled = false;
+    const id = ontdFetchId;
+    void translateText(ontd.text, targetLang, 'en').then((x) => {
+      if (!cancelled) setOnThisDayResult({ id, text: x });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [ontd?.text, targetLang, ontdFetchId]);
+
+  useEffect(() => {
+    if (!meal?.strMeal || targetLang === 'en') return;
+    let cancelled = false;
+    const id = mealFetchId;
+    void translateText(meal.strMeal, targetLang, 'en').then((x) => {
+      if (!cancelled) setMealTitleResult({ id, text: x });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [meal?.strMeal, targetLang, mealFetchId]);
+
+  const onThisDayLine = !ontd?.text
+    ? undefined
+    : targetLang === 'en'
+      ? ontd.text
+      : onThisDayResult?.id === ontdFetchId
+        ? onThisDayResult.text
+        : ontd.text;
+
+  const mealTitleLine = !meal?.strMeal
+    ? undefined
+    : targetLang === 'en'
+      ? meal.strMeal
+      : mealTitleResult?.id === mealFetchId
+        ? mealTitleResult.text
+        : meal.strMeal;
 
   const send = async () => {
     if (!newKudo.to.trim() || !newKudo.message.trim()) return;
@@ -454,18 +527,27 @@ function DashboardTab({ userName, userCity, userCityId, wotd, icebreakers, autoC
   };
 
   const fact = autoCulture.facts[userCityId];
-  const ontd = autoCulture.onThisDay;
-  const meal = autoCulture.meal;
   const phrase = wotd[0];
 
+  const ontdForHero = ontd ? { ...ontd, text: onThisDayLine ?? ontd.text } : null;
+  const mealForHero = meal ? { ...meal, strMeal: mealTitleLine ?? meal.strMeal } : null;
+
   const slotTitles = [t('today_slot_calendar'), t('today_slot_food'), t('today_slot_phrase'), t('today_slot_city')];
-  const { heroSlot, heroContent } = resolveTodayHero(daySlot, ontd, meal, phrase, fact, t);
+  const { heroSlot, heroContent } = resolveTodayHero(
+    daySlot,
+    ontdForHero,
+    mealForHero,
+    phrase,
+    fact,
+    t,
+    t('wikipedia_link'),
+  );
 
   const todayTalkPrompt = useMemo(() => {
     const extras = [t('today_talk_extra_1'), t('today_talk_extra_2'), t('today_talk_extra_3')];
     const merged = [...new Set([...icebreakers, t('icebreaker_default'), ...extras])];
     const d = new Date();
-    const dayKey = d.getFullYear() * 400 + (d.getMonth() + 1) * 40 + d.getDate();
+    const dayKey = d.getUTCFullYear() * 400 + (d.getUTCMonth() + 1) * 40 + d.getUTCDate();
     return merged[dayKey % merged.length] ?? t('icebreaker_default');
   }, [icebreakers, t]);
 
@@ -505,18 +587,18 @@ function DashboardTab({ userName, userCity, userCityId, wotd, icebreakers, autoC
         </div>
         {showForm && (
           <div className="kudo-form">
-            <input className="kudo-input" placeholder="Naar wie? (bijv. Ananya – Chennai)" value={newKudo.to} onChange={e => setNewKudo({ ...newKudo, to: e.target.value })} />
-            <textarea className="kudo-input kudo-textarea" placeholder="Schrijf in jouw eigen taal 🌐" value={newKudo.message} onChange={e => setNewKudo({ ...newKudo, message: e.target.value })} />
+            <input className="kudo-input" placeholder={t('kudo_placeholder_to')} value={newKudo.to} onChange={e => setNewKudo({ ...newKudo, to: e.target.value })} />
+            <textarea className="kudo-input kudo-textarea" placeholder={t('kudo_placeholder_message')} value={newKudo.message} onChange={e => setNewKudo({ ...newKudo, message: e.target.value })} />
             <button type="button" className="btn-kudos" onClick={send} disabled={isTranslating}>
-              {isTranslating ? 'Vertalen...' : <><Send size={16} /> Verstuur en Vertaal</>}
+              {isTranslating ? t('kudo_translating') : <><Send size={16} /> {t('kudo_submit_btn')}</>}
             </button>
           </div>
         )}
         <div className="kudos-feed kudos-feed--today">
-          {kudos.length === 0 && <div className="empty-state">Nog geen kudos. Stuur de eerste! 🚀</div>}
+          {kudos.length === 0 && <div className="empty-state">{t('empty_kudos')}</div>}
           {kudos.map(k => (
             <div key={k.id} className="kudo-item">
-              <div className="kudo-header"><span className="kudo-author">{k.emoji} {k.from}</span><span className="kudo-to">→ {k.to}</span></div>
+              <div className="kudo-header"><span className="kudo-author">{k.emoji} {k.from}</span><span className="kudo-to">{t('kudo_to_arrow', { to: k.to })}</span></div>
               <div className="kudo-city-label" style={{ fontSize: '0.7rem', opacity: 0.6, marginBottom: '0.5rem' }}>{k.fromCity} · {k.time}</div>
               <div className="kudo-message">{k.message}</div>
               <div className="kudo-translation"><Globe size={12} /> {k.translation}</div>
@@ -583,7 +665,7 @@ function ConnectTab({ userName, userCityId, icebreakers, onPostToWall, t, squad,
       const shuffled = [...others].sort(() => 0.5 - Math.random());
       const selected = shuffled.slice(0, 2);
 
-      setCrew([{ name: 'Jij (You)', cityId: userCityId }, ...selected.map(s => ({ name: s.name, cityId: s.cityId }))]);
+      setCrew([{ name: t('roulette_you_self'), cityId: userCityId }, ...selected.map(s => ({ name: s.name, cityId: s.cityId }))]);
       setIcebreaker(iceList[Math.floor(Math.random() * iceList.length)]);
       setSpinning(false); setDone(true);
     }, 1500);
@@ -591,7 +673,7 @@ function ConnectTab({ userName, userCityId, icebreakers, onPostToWall, t, squad,
 
   const postAnswer = async () => {
     if (!answer.trim()) return;
-    await onPostToWall(`🎲 Roulette-antwoord: "${answer}"`, '🎲');
+    await onPostToWall(`${t('roulette_wall_prefix')} "${answer}"`, '🎲');
     setAnswered(true);
   };
 
@@ -634,15 +716,15 @@ function ConnectTab({ userName, userCityId, icebreakers, onPostToWall, t, squad,
 
       <div className="glass-panel roulette-panel" style={{ marginTop: '1.5rem' }}>
         <div className="panel-header"><Shuffle className="panel-icon" size={22} /><h2>{t('roulette')}</h2></div>
-        <p className="roulette-desc">Verbind willekeurig 3 collega's uit de drie locaties voor een leuke culturele uitwisseling!</p>
+        <p className="roulette-desc">{t('roulette_desc')}</p>
         <div style={{ textAlign: 'center' }}>
           <button className={`btn-spin ${spinning ? 'spinning' : ''}`} onClick={spin} disabled={spinning}>
-            <Shuffle size={20} /> {spinning ? 'Verbinden...' : 'Draai de Roulette!'}
+            <Shuffle size={20} /> {spinning ? t('roulette_connecting') : t('roulette_spin')}
           </button>
         </div>
         {done && crew.length > 0 && (
           <div className="roulette-result">
-            <h3>☕ Jouw Culture Crew</h3>
+            <h3>☕ {t('roulette_crew_title')}</h3>
             <div className="squad-cards">
               {crew.map((m, i) => (
                 <div key={i} className={`squad-member-card ${m.cityId}`}>
@@ -653,17 +735,17 @@ function ConnectTab({ userName, userCityId, icebreakers, onPostToWall, t, squad,
               ))}
             </div>
             <div className="icebreaker-box">
-              <div className="icebreaker-label">💬 Icebreaker van vandaag</div>
+              <div className="icebreaker-label">💬 {t('icebreaker_today_label')}</div>
               <div className="icebreaker-text">"{icebreaker}"</div>
             </div>
             {!answered ? (
               <div className="answer-box">
-                <p className="answer-label">✍️ Schrijf jouw antwoord — wordt gepost op de Culture Wall!</p>
-                <textarea className="kudo-input kudo-textarea" placeholder="Jouw antwoord..." value={answer} onChange={e => setAnswer(e.target.value)} />
-                <button className="btn-kudos" onClick={postAnswer}><Image size={16} /> Post op Culture Wall</button>
+                <p className="answer-label">✍️ {t('roulette_answer_label')}</p>
+                <textarea className="kudo-input kudo-textarea" placeholder={t('roulette_answer_placeholder')} value={answer} onChange={e => setAnswer(e.target.value)} />
+                <button className="btn-kudos" onClick={postAnswer}><Image size={16} /> {t('roulette_post_wall')}</button>
               </div>
             ) : (
-              <div className="answered-confirm"><Check size={20} /><span>Gepost via Firestore! 🌍</span></div>
+              <div className="answered-confirm"><Check size={20} /><span>{t('roulette_posted_confirm')}</span></div>
             )}
           </div>
         )}
@@ -675,7 +757,15 @@ function ConnectTab({ userName, userCityId, icebreakers, onPostToWall, t, squad,
 // ─────────────────────────────────────────
 // Culture Wall Tab
 // ─────────────────────────────────────────
-function CultureWallTab({ userName, userCityId, t }: { userName: string; userCityId: string, t: (k: string) => string }) {
+function CultureWallTab({
+  userName,
+  userCityId,
+  t,
+}: {
+  userName: string;
+  userCityId: string;
+  t: (k: string, params?: Record<string, string | number>) => string;
+}) {
   const { posts, addPost, toggleLike } = useWallPosts();
   const [newPost, setNewPost] = useState('');
   const [newEmoji, setNewEmoji] = useState('📸');
@@ -708,16 +798,16 @@ function CultureWallTab({ userName, userCityId, t }: { userName: string; userCit
   return (
     <div className="wall-container">
       <div className="glass-panel">
-        <div className="panel-header"><Camera className="panel-icon" size={22} /><h2>{t('wall')}</h2><span className="translate-badge">🌐 API Live</span></div>
+        <div className="panel-header"><Camera className="panel-icon" size={22} /><h2>{t('wall')}</h2><span className="translate-badge">{t('wall_api_badge')}</span></div>
         <div className="new-post-form">
           <div className="post-form-row">
             <select className="auth-input auth-select" style={{ width: 'auto' }} value={newEmoji} onChange={e => setNewEmoji(e.target.value)}>
               {['📸','☕','🍕','🎉','💻','🌅','🏙️','🎊','🌶️','🥐','🧀','🎶','🏏','🐘','⛵'].map(e => <option key={e}>{e}</option>)}
             </select>
-            <textarea className="kudo-input kudo-textarea" style={{ flex: 1 }} placeholder="Deel een moment — schrijf in jouw eigen taal! 🌐" value={newPost} onChange={e => setNewPost(e.target.value)} />
+            <textarea className="kudo-input kudo-textarea" style={{ flex: 1 }} placeholder={t('wall_share_placeholder')} value={newPost} onChange={e => setNewPost(e.target.value)} />
           </div>
           <button className="btn-kudos" onClick={handlePost} disabled={isTranslating}>
-            {isTranslating ? 'Echte vertaling bezig...' : <><Image size={16} /> Post &amp; Vertaal naar alle talen</>}
+            {isTranslating ? t('wall_post_translating') : <><Image size={16} /> {t('wall_post_button')}</>}
           </button>
         </div>
       </div>
@@ -762,16 +852,13 @@ function CultureWallTab({ userName, userCityId, t }: { userName: string; userCit
 // Main App
 // ─────────────────────────────────────────
 export default function App() {
-  const [user, setUser] = useState<{ name: string; city: string } | null>(() => {
-    const saved = sessionStorage.getItem('dupoind_user');
-    return saved ? JSON.parse(saved) as { name: string; city: string } : null;
-  });
+  const [user, setUser] = useState<{ name: string; city: string } | null>(() => loadPersistedUserProfile());
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   const { codes } = useSquadCodes();
   const { questions: quizQuestions, loading: quizPoolLoading } = useQuizPool();
   const { wotd, icebreakers, seed } = useCultureData();
   const { lang, setLang, t } = useTranslation();
-  const autoCulture = useAutomatedCulture(lang);
+  const autoCulture = useAutomatedCulture();
   const adminAuth = useAdminAuth();
   const { squad, setStatus } = usePresence();
   const { sendMsg } = useGlobalChat();
@@ -846,8 +933,13 @@ export default function App() {
   }, [autoCulture.holidays, user, t, sendMsg, lang]);
 
   const handleLogin = (name: string, city: string) => {
-    const u = { name, city }; setUser(u);
-    sessionStorage.setItem('dupoind_user', JSON.stringify(u));
+    const u = { name, city };
+    setUser(u);
+    try {
+      localStorage.setItem(USER_PROFILE_LS, JSON.stringify(u));
+    } catch {
+      /* quota / private mode */
+    }
   };
 
   const handleSeed = async () => {
@@ -935,6 +1027,7 @@ export default function App() {
           </div>
         </div>
       </header>
+      <UpdateAvailableBanner lang={lang} />
       <div className={`app-main-scroll ${activeTab === 'chat' ? 'app-main-scroll--chat' : ''}`}>
         <main className={activeTab === 'chat' ? 'app-main-inner app-main-inner--chat' : 'app-main-inner'} lang={lang === 'TA' ? 'ta' : lang === 'NL' ? 'nl' : lang === 'PT' ? 'pt' : 'en'}>
           {activeTab === 'dashboard' && (
@@ -946,6 +1039,7 @@ export default function App() {
               icebreakers={icebreakers}
               autoCulture={autoCulture}
               t={t}
+              lang={lang}
             />
           )}
           {activeTab === 'connect' && (

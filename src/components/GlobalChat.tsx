@@ -7,16 +7,7 @@ import { getCultureFallbackReply } from '../services/assistantFallback';
 import { explainGeminiFailure } from '../services/geminiDiagnostics';
 import { getHubConfig } from '../config/appConfig';
 import { isGeminiConfigured } from '../config/geminiEnv';
-import type { ChatMsg } from '../hooks/useFirestore';
-import type { Lang } from '../hooks/useTranslation';
-
-function displayChatBody(msg: ChatMsg, uiLang: Lang): string {
-  const tr = msg.trans;
-  if (uiLang === 'EN') return (tr.en && tr.en.trim().length > 0) ? tr.en : msg.text;
-  const k = uiLang.toLowerCase() as 'nl' | 'pt' | 'ta';
-  const line = tr[k];
-  return (line && line.trim().length > 0) ? line : msg.text;
-}
+import { pickChatDisplayLine } from '../utils/translate';
 
 export function GlobalChat({ userName }: { userName: string }) {
   const assistantName = getHubConfig().assistantName;
@@ -159,7 +150,7 @@ export function GlobalChat({ userName }: { userName: string }) {
         {messages.map((msg) => {
           const isMe = msg.author === userName;
           const isBot = msg.author === assistantName || msg.author === 'Dupo-Atlas';
-          const translatedText = displayChatBody(msg, currentLang);
+          const translatedText = pickChatDisplayLine(msg.text, msg.trans, currentLang);
 
           return (
             <div key={msg.id} style={{ alignSelf: isMe ? 'flex-end' : 'flex-start', maxWidth: '85%', animation: 'fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1)' }}>
