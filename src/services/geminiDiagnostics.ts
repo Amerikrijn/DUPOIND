@@ -44,8 +44,8 @@ export function explainGeminiFailure(
     d.includes('service disabled')
   ) {
     return en
-      ? 'Enable the Generative Language API for the Google Cloud project that owns this API key: Google Cloud Console → APIs & Services → Library → search “Generative Language API” → Enable. The key must belong to the same project (check in Google AI Studio / Cloud Console).'
-      : 'Schakel de Generative Language API in voor het Google Cloud-project waar deze API-sleutel bij hoort: Console → APIs & Services → Library → zoek “Generative Language API” → Inschakelen. Controleer of je sleutel uit AI Studio / Cloud bij hetzelfde project hoort.';
+      ? 'Enable “Generative Language API” in the same Google Cloud project as your API key. Critical: open console.cloud.google.com and use the project dropdown (top bar) — pick the project name shown next to your key in Google AI Studio (e.g. “Gemini Project Culture app”), not a different project like “My First Project”. Then APIs & Services → Library → Generative Language API → Enable. Key + enabled API must match one project.'
+      : 'Zet “Generative Language API” aan in hetzelfde Google Cloud-project als je API-sleutel. Belangrijk: ga naar console.cloud.google.com en kies rechtsboven in de project-dropdown exact het project dat bij je sleutel in Google AI Studio staat (bijv. “Gemini Project Culture app”) — niet per ongeluk “My First Project” als je sleutel ergens anders hoort. Daarna: APIs & Services → Bibliotheek → Generative Language API → Inschakelen. Sleutel en ingeschakelde API moeten één project zijn.';
   }
 
   if (code === 'invalid_key' || d.includes('api key not valid') || d.includes('invalid api key')) {

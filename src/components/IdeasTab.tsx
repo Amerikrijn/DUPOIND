@@ -53,7 +53,6 @@ export function IdeasTab({ userName, userCityId }: { userName: string, userCityI
                 style={{ width: 'auto' }}
               >
                 <option value="suggestion">💡 Suggestion</option>
-                <option value="poll">📊 New Poll</option>
                 <option value="event">🎉 Event Idea</option>
                 <option value="fact">📜 Local Fact</option>
               </select>

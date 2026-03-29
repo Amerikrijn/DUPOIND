@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { useIdeas, useWallPosts, usePolls, useKudos } from './useFirestore';
+import { useIdeas, useWallPosts, useKudos } from './useFirestore';
 import { getFullTranslation } from '../utils/translate';
 import type { Idea, WallPost } from '../types';
 import { getHubConfig } from '../config/appConfig';
@@ -11,7 +11,6 @@ import { getHubConfig } from '../config/appConfig';
 export function useLivingApp() {
   const { ideas, updateStatus } = useIdeas();
   const { posts, addPost } = useWallPosts();
-  const { createPoll } = usePolls();
   const { kudos } = useKudos();
 
   const ideasRef = useRef(ideas);
@@ -19,7 +18,6 @@ export function useLivingApp() {
   const kudosRef = useRef(kudos);
   const addPostRef = useRef(addPost);
   const updateStatusRef = useRef(updateStatus);
-  const createPollRef = useRef(createPoll);
 
   useEffect(() => {
     ideasRef.current = ideas;
@@ -27,8 +25,7 @@ export function useLivingApp() {
     kudosRef.current = kudos;
     addPostRef.current = addPost;
     updateStatusRef.current = updateStatus;
-    createPollRef.current = createPoll;
-  }, [ideas, posts, kudos, addPost, updateStatus, createPoll]);
+  }, [ideas, posts, kudos, addPost, updateStatus]);
 
   useEffect(() => {
     const cfg = getHubConfig();
@@ -59,32 +56,22 @@ export function useLivingApp() {
 
     async function realizeIdea(idea: Idea) {
       const { title, description, category, author } = idea;
-      const content = `✨ SUGGESTION REALIZED: ${title}\n(Originally suggested by ${author})\n\n${description}`;
+      const prefix =
+        category === 'poll'
+          ? `📊 Community vote idea (from ${author}):\n${title}\n\n`
+          : `✨ SUGGESTION REALIZED: ${title}\n(Originally suggested by ${author})\n\n`;
+      const content = `${prefix}${description}`;
       const translations = await getFullTranslation(content);
 
-      if (category === 'poll') {
-        await createPollRef.current({
-          question: `📊 SQUAD VOTE: ${title}`,
-          options: [
-            { label: 'Agree 👍', votes: [] },
-            { label: 'Strongly Agree 🔥', votes: [] },
-            { label: 'Meh 😐', votes: [] },
-          ],
-          author: assistantName,
-          cityId: 'system',
-          createdAt: new Date().toISOString(),
-        });
-      } else {
-        await addPostRef.current({
-          author: assistantName,
-          cityId: 'system',
-          city: 'System',
-          content,
-          emoji: '🚀',
-          time: new Date().toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' }),
-          translations,
-        });
-      }
+      await addPostRef.current({
+        author: assistantName,
+        cityId: 'system',
+        city: 'System',
+        content,
+        emoji: category === 'poll' ? '📊' : '🚀',
+        time: new Date().toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' }),
+        translations,
+      });
 
       await updateStatusRef.current(idea.id, 'realized');
     }

@@ -138,8 +138,14 @@ export function GlobalChat({ userName }: { userName: string }) {
 
       {geminiHint && (
         <div className="chat-ai-hint" role="status">
-          <strong style={{ display: 'block', marginBottom: '0.35rem', opacity: 0.95 }}>{t('gemini_diag_title')}</strong>
-          {geminiHint}
+          <p className="chat-ai-hint-short">{t('gemini_user_short')}</p>
+          <details className="chat-ai-hint-details">
+            <summary>{t('gemini_diag_details_summary')}</summary>
+            <div>
+              <strong className="chat-ai-hint-tech-title">{t('gemini_diag_title')}</strong>
+              <div className="chat-ai-hint-tech-body">{geminiHint}</div>
+            </div>
+          </details>
         </div>
       )}
 

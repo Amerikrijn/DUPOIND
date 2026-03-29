@@ -25,15 +25,6 @@ export type KudoEntry = {
   time: string;
 };
 
-export type Poll = {
-  id: string;
-  question: string;
-  options: { label: string; votes: string[] }[];
-  author: string;
-  cityId: string;
-  createdAt: string;
-};
-
 export type UserStatus = {
   id?: string;
   name: string;
@@ -85,17 +76,8 @@ export type AssistantResponse = {
   type: 'fact' | 'news' | 'weather' | 'translation' | 'general';
 };
 
-export type SystemLog = {
-  id: string;
-  action: string;
-  timestamp: string;
-  status: 'success' | 'warning' | 'error';
-  details?: string;
-};
-
 /** Lightweight events so the app can learn what people do (no PII in metadata). */
 export type EngagementKind =
   | 'quiz_complete'
-  | 'poll_vote'
   | 'wall_like'
   | 'idea_vote';

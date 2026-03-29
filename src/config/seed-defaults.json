@@ -13,32 +13,6 @@
     { "question": "Hoe heet het lokale filterkoffie-ritueel in Chennai?", "options": ["Expresso", "Chai", "Filter Kaapi", "Matcha"], "correct": 2, "city": "Chennai", "cityId": "chennai", "explanation": "Filter Kaapi is een diepgeworteld ochtendritueel in Zuid-India.", "author": "DUPOIND Cultural Team" },
     { "question": "Wat is 'Gezellig' in het Engels volgens UU?", "options": ["Cozy", "Fun", "No direct translation", "Busy"], "correct": 2, "city": "Utrecht", "cityId": "utrecht", "explanation": "Gezelligheid is een uniek Nederlands concept dat sfeer en saamhorigheid beschrijft.", "author": "DUPOIND Cultural Team" }
   ],
-  "initialPolls": [
-    {
-      "id": "seed-1",
-      "question": "🍕 Welk eten zou jij meenemen naar een potluck met alle drie de locaties?",
-      "options": [
-        { "label": "🧀 Kaas & Stroopwafels (Utrecht)", "votes": [] },
-        { "label": "🥐 Pastel de Nata (Lisbon)", "votes": [] },
-        { "label": "🌶️ Masala Chai & Samosas (Chennai)", "votes": [] }
-      ],
-      "author": "DUPOIND",
-      "cityId": "utrecht",
-      "createdAt": ""
-    },
-    {
-      "id": "seed-2",
-      "question": "🌍 Welke locatie zou jij het liefst eens bezoeken?",
-      "options": [
-        { "label": "🇳🇱 Utrecht — fietsen & kaasmarkt", "votes": [] },
-        { "label": "🇵🇹 Lisbon — zon & Fado", "votes": [] },
-        { "label": "🇮🇳 Chennai — chai & cricket", "votes": [] }
-      ],
-      "author": "DUPOIND",
-      "cityId": "lisbon",
-      "createdAt": ""
-    }
-  ],
   "seedFacts": [
     { "cityId": "utrecht", "flag": "🇳🇱", "city": "Utrecht", "fact": "Utrecht heeft de grootste fietsenstalling ter wereld! 🚲" },
     { "cityId": "lisbon", "flag": "🇵🇹", "city": "Lisbon", "fact": "Lissabon is ouder dan Rome. 🏛️" },

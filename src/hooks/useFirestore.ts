@@ -7,12 +7,10 @@ import { db } from '../firebase';
 import type {
   WallPost,
   KudoEntry,
-  Poll,
   UserStatus,
   Dish,
   QuizQuestion,
   Idea,
-  SystemLog,
   EngagementKind,
 } from '../types';
 import { ENGAGEMENT_SIGNALS_COLLECTION } from '../lib/livingHub';
@@ -89,47 +87,6 @@ export function useKudos() {
   };
 
   return { kudos, addKudo };
-}
-
-// ── Polls ───────────────────────────────────────────────
-export function usePolls() {
-  const [polls, setPolls] = useState<Poll[]>([]);
-
-  useEffect(() => {
-    const q = query(collection(db, 'polls'), orderBy('createdAt', 'desc'), limit(10));
-    const unsub = onSnapshot(q, snap => {
-      setPolls(snap.docs.map(d => ({ id: d.id, ...d.data() } as Poll)));
-    });
-    return unsub;
-  }, []);
-
-  const createPoll = async (poll: Omit<Poll, 'id'>) => {
-    await addDoc(collection(db, 'polls'), { ...poll, createdAt: serverTimestamp() });
-  };
-
-  const vote = async (pollId: string, optionIndex: number, userName: string, cityId: string) => {
-    const ref = doc(db, 'polls', pollId);
-    // Remove vote from all options first, then add to chosen
-    const poll = polls.find(p => p.id === pollId);
-    if (!poll) return;
-    const newOptions = poll.options.map((opt, i) => {
-      const votes = opt.votes || [];
-      return {
-        ...opt,
-        votes: i === optionIndex
-          ? [...votes.filter(v => v !== userName), userName]
-          : votes.filter(v => v !== userName),
-      };
-    });
-    await updateDoc(ref, { options: newOptions });
-    void recordEngagementSignal('poll_vote', {
-      userName,
-      cityId,
-      metadata: { pollId, optionIndex },
-    });
-  };
-
-  return { polls, createPoll, vote };
 }
 
 // ── Presence / Status ────────────────────────────────────
@@ -363,24 +320,20 @@ export function useIdeas() {
   return { ideas, loading, addIdea, toggleVote, updateStatus };
 }
 
-// ── System Logs ──────────────────────────────────────────
-export function useSystemLogs() {
-  const [logs, setLogs] = useState<SystemLog[]>([]);
+/** Own presence doc — avatar mood still works when user is “unavailable” (hidden from squad list). `tabKey` re-runs the effect after Connect creates `dupoind_userId` (child render runs before parent effects). */
+export function useMyPresenceDoc(loggedIn: boolean, tabKey: string) {
+  const [status, setStatus] = useState<UserStatus | null>(null);
 
   useEffect(() => {
-    const q = query(collection(db, 'systemLogs'), orderBy('timestamp', 'desc'), limit(10));
-    const unsub = onSnapshot(q, snap => {
-      setLogs(snap.docs.map(d => ({ id: d.id, ...d.data() } as SystemLog)));
+    if (!loggedIn) return;
+    const id = typeof localStorage !== 'undefined' ? localStorage.getItem('dupoind_userId') : null;
+    if (!id) return;
+    const ref = doc(db, 'presence', id);
+    const unsub = onSnapshot(ref, (snap) => {
+      setStatus(snap.exists() ? (snap.data() as UserStatus) : null);
     });
     return unsub;
-  }, []);
+  }, [loggedIn, tabKey]);
 
-  const addLog = async (log: Omit<SystemLog, 'id' | 'timestamp'>) => {
-    await addDoc(collection(db, 'systemLogs'), {
-      ...log,
-      timestamp: new Date().toISOString()
-    });
-  };
-
-  return { logs, addLog };
+  return loggedIn ? status : null;
 }

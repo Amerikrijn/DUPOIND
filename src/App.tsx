@@ -1,35 +1,34 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
 import {
-  Globe, Heart, MessageSquare, Send,
+  Globe, Heart, MessageSquare, Send, MessageCircle,
   Shuffle, Camera, Home, LayoutGrid, Lock, ArrowRight, X, Check,
-  Lightbulb, Image, BarChart2, Zap, Trophy
+  Lightbulb, Image, Zap, Trophy
 } from 'lucide-react';
 import './index.css';
 
-import { useWallPosts, useKudos, usePresence, useCultureData, useSquadCodes, useGlobalChat } from './hooks/useFirestore';
+import { useWallPosts, useKudos, usePresence, useCultureData, useSquadCodes, useGlobalChat, useMyPresenceDoc } from './hooks/useFirestore';
 import { useQuizPool } from './hooks/useQuizPool';
 import { useWeather } from './hooks/useWeather';
 import { useAutomatedCulture } from './hooks/useAutomatedCulture';
-import type { Holiday, DayCycle, RadioStation } from './hooks/useAutomatedCulture';
+import type { Holiday, DayCycle, RadioStation, CityFact, MealInspiration } from './hooks/useAutomatedCulture';
+import type { OnThisDayHighlight } from './services/wikipediaOnThisDay';
 import { useTranslation } from './hooks/useTranslation';
 import type { Lang } from './hooks/useTranslation';
 import { useAdminAuth } from './hooks/useAdminAuth';
 import { getFullTranslation } from './utils/translate';
 import type { UserStatus, Dish } from './types';
-import { QUIZ_QUESTIONS, INITIAL_POLLS, getMoods, seedDefaults } from './data';
+import { QUIZ_QUESTIONS, getMoods, seedDefaults } from './data';
 import { getHubConfig, getCityById } from './config/appConfig';
 
-import { PollsTab } from './components/PollsTab';
 import { QuizTab } from './components/QuizTab';
 import { GlobalChat } from './components/GlobalChat';
 import { IdeasTab } from './components/IdeasTab';
 import { useLivingApp } from './hooks/useLivingApp';
-import { SystemDashboard } from './components/SystemDashboard';
 
 // ─────────────────────────────────────────
 // Constants & Helpers (Lazy/Safe)
 // ─────────────────────────────────────────
-type Tab = 'dashboard' | 'connect' | 'wall' | 'quiz' | 'polls' | 'chat' | 'ideas';
+type Tab = 'dashboard' | 'connect' | 'wall' | 'quiz' | 'chat' | 'ideas';
 
 function getHubCities() {
   const cfg = getHubConfig();
@@ -46,6 +45,28 @@ function getCityFlag(cityId: string) {
 }
 function getCityName(cityId: string) {
   return getCityById(cityId)?.displayName ?? cityId;
+}
+
+const HOLIDAY_POSTED_LS = 'dupoind_posted_holidays_v1';
+
+function readPostedHolidayKeys(): Set<string> {
+  try {
+    const raw = localStorage.getItem(HOLIDAY_POSTED_LS);
+    if (!raw) return new Set();
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return new Set();
+    return new Set(parsed.filter((x): x is string => typeof x === 'string'));
+  } catch {
+    return new Set();
+  }
+}
+
+function writePostedHolidayKeys(keys: Set<string>) {
+  try {
+    localStorage.setItem(HOLIDAY_POSTED_LS, JSON.stringify([...keys]));
+  } catch {
+    /* ignore quota */
+  }
 }
 
 // ─────────────────────────────────────────
@@ -304,14 +325,20 @@ function CitiesHub({
 // ─────────────────────────────────────────
 function SquadRadio({ radios, t }: { radios: Record<string, RadioStation | null>, t: (k: string) => string }) {
   return (
-    <div className="glass-panel" style={{ marginTop: '1rem' }}>
-      <div className="panel-header"><Zap className="panel-icon" size={22} /><h2>{t('radio')}</h2></div>
+    <div className="glass-panel squad-radio-panel" style={{ marginTop: '1rem' }}>
+      <div className="panel-header squad-radio-header">
+        <Zap className="panel-icon" size={22} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <h2>{t('radio')}</h2>
+          <p className="squad-radio-hint">{t('radio_rotates')}</p>
+        </div>
+      </div>
       <div style={{ display: 'flex', gap: '1rem', overflowX: 'auto', padding: '0.5rem' }}>
         {getHubCities().map(city => {
           const r = radios[city.id];
           if (!r) return null;
           return (
-            <a key={city.id} href={r.url} target="_blank" rel="noreferrer" className={`radio-card ${city.id}`} 
+            <a key={`${city.id}-${r.url}`} href={r.url} target="_blank" rel="noreferrer" className={`radio-card ${city.id}`} 
                style={{ flex: '1', minWidth: '120px', textDecoration: 'none', background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '0.75rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
               {r.favicon ? <img src={r.favicon} alt="" style={{ width: 32, height: 32, borderRadius: '4px' }} /> : <div style={{ fontSize: '1.5rem' }}>📻</div>}
               <div style={{ fontSize: '0.75rem', fontWeight: 'bold', textAlign: 'center', color: 'white' }}>{r.name}</div>
@@ -332,10 +359,78 @@ interface DashboardProps {
   userCity: string;
   userCityId: string;
   wotd: { lang: string; word: string; translation: string; useCase: string }[]; 
+  icebreakers: string[];
   autoCulture: ReturnType<typeof useAutomatedCulture>;
   t: (k: string) => string;
 }
-function DashboardTab({ userName, userCity, userCityId, wotd, autoCulture, t }: DashboardProps) {
+
+function resolveTodayHero(
+  daySlot: number,
+  ontd: OnThisDayHighlight | null,
+  meal: MealInspiration | null,
+  phrase: { word: string; translation: string } | undefined,
+  fact: CityFact | null | undefined,
+  t: (k: string) => string,
+): { heroSlot: number; heroContent: ReactNode } {
+  const tryCalendar = () =>
+    ontd ? (
+      <>
+        <p className="today-readable">{ontd.text}</p>
+        <a className="today-link" href={ontd.url} target="_blank" rel="noreferrer">Wikipedia →</a>
+      </>
+    ) : null;
+  const tryFood = () =>
+    meal ? (
+      <div className="today-meal-row">
+        {meal.strMealThumb && (
+          <img src={meal.strMealThumb} alt="" className="today-meal-thumb" />
+        )}
+        <div>
+          <p className="today-meal-title">{meal.strMeal}</p>
+          <a className="today-link" href={meal.strSource || '#'} target="_blank" rel="noreferrer">
+            {t('inspiration')} →
+          </a>
+        </div>
+      </div>
+    ) : null;
+  const tryPhrase = () =>
+    phrase ? (
+      <div>
+        <p className="today-readable today-phrase-word">“{phrase.word}”</p>
+        <p className="today-muted">{phrase.translation}</p>
+      </div>
+    ) : null;
+  const tryCity = () =>
+    fact ? (
+      <div className="today-meal-row">
+        {fact.thumbnail && (
+          <img src={fact.thumbnail.source} alt="" className="today-meal-thumb" />
+        )}
+        <div>
+          <p className="today-readable" style={{ marginBottom: '0.5rem' }}>
+            {fact.extract}
+          </p>
+          {fact.content_urls && (
+            <a className="today-link" href={fact.content_urls.desktop.page} target="_blank" rel="noreferrer">
+              Wikipedia →
+            </a>
+          )}
+        </div>
+      </div>
+    ) : null;
+
+  const order = [tryCalendar, tryFood, tryPhrase, tryCity];
+  const primary = order[daySlot]();
+  if (primary) return { heroSlot: daySlot, heroContent: primary };
+  for (let i = 0; i < 4; i++) {
+    if (i === daySlot) continue;
+    const alt = order[i]();
+    if (alt) return { heroSlot: i, heroContent: alt };
+  }
+  return { heroSlot: daySlot, heroContent: <p className="auth-hint">{t('loading')}</p> };
+}
+
+function DashboardTab({ userName, userCity, userCityId, wotd, icebreakers, autoCulture, t }: DashboardProps) {
   const { kudos, addKudo } = useKudos();
   const [showForm, setShowForm] = useState(false);
   const [newKudo, setNewKudo] = useState({ to: '', message: '' });
@@ -364,67 +459,15 @@ function DashboardTab({ userName, userCity, userCityId, wotd, autoCulture, t }: 
   const phrase = wotd[0];
 
   const slotTitles = [t('today_slot_calendar'), t('today_slot_food'), t('today_slot_phrase'), t('today_slot_city')];
+  const { heroSlot, heroContent } = resolveTodayHero(daySlot, ontd, meal, phrase, fact, t);
 
-  const renderPrimary = () => {
-    const tryCalendar = () =>
-      ontd ? (
-        <>
-          <p className="today-readable">{ontd.text}</p>
-          <a className="today-link" href={ontd.url} target="_blank" rel="noreferrer">Wikipedia →</a>
-        </>
-      ) : null;
-    const tryFood = () =>
-      meal ? (
-        <div className="today-meal-row">
-          {meal.strMealThumb && (
-            <img src={meal.strMealThumb} alt="" className="today-meal-thumb" />
-          )}
-          <div>
-            <p className="today-meal-title">{meal.strMeal}</p>
-            <a className="today-link" href={meal.strSource || '#'} target="_blank" rel="noreferrer">
-              {t('inspiration')} →
-            </a>
-          </div>
-        </div>
-      ) : null;
-    const tryPhrase = () =>
-      phrase ? (
-        <div>
-          <p className="today-readable today-phrase-word">“{phrase.word}”</p>
-          <p className="today-muted">{phrase.translation}</p>
-        </div>
-      ) : null;
-    const tryCity = () =>
-      fact ? (
-        <div className="today-meal-row">
-          {fact.thumbnail && (
-            <img src={fact.thumbnail.source} alt="" className="today-meal-thumb" />
-          )}
-          <div>
-            <p className="today-readable" style={{ marginBottom: '0.5rem' }}>
-              {fact.extract}
-            </p>
-            {fact.content_urls && (
-              <a className="today-link" href={fact.content_urls.desktop.page} target="_blank" rel="noreferrer">
-                Wikipedia →
-              </a>
-            )}
-          </div>
-        </div>
-      ) : null;
-
-    const order = [tryCalendar, tryFood, tryPhrase, tryCity];
-    const primary = order[daySlot]();
-    if (primary) return primary;
-    for (let i = 0; i < 4; i++) {
-      if (i === daySlot) continue;
-      const alt = order[i]();
-      if (alt) return alt;
-    }
-    return <p className="auth-hint">{t('loading')}</p>;
-  };
-
-  const moreSlots = ([0, 1, 2, 3] as const).filter((s) => s !== daySlot);
+  const todayTalkPrompt = useMemo(() => {
+    const extras = [t('today_talk_extra_1'), t('today_talk_extra_2'), t('today_talk_extra_3')];
+    const merged = [...new Set([...icebreakers, t('icebreaker_default'), ...extras])];
+    const d = new Date();
+    const dayKey = d.getFullYear() * 400 + (d.getMonth() + 1) * 40 + d.getDate();
+    return merged[dayKey % merged.length] ?? t('icebreaker_default');
+  }, [icebreakers, t]);
 
   return (
     <div className="today-page">
@@ -436,38 +479,24 @@ function DashboardTab({ userName, userCity, userCityId, wotd, autoCulture, t }: 
           {t('today_tab')}
         </h1>
         <p className="today-tagline">{t('today_tagline')}</p>
-        <div className="today-primary-label">{slotTitles[daySlot]}</div>
-        <div className="today-primary-body">{renderPrimary()}</div>
+        <div className="today-primary-label">{slotTitles[heroSlot]}</div>
+        <div className="today-primary-body">{heroContent}</div>
+      </section>
+
+      <section className="today-talk-starter glass-panel" aria-labelledby="today-talk-heading">
+        <div className="today-talk-head">
+          <MessageCircle className="today-talk-icon" size={22} aria-hidden />
+          <div>
+            <h2 id="today-talk-heading" className="today-talk-title">{t('today_talk_title')}</h2>
+            <p className="today-talk-sub">{t('today_talk_sub')}</p>
+          </div>
+        </div>
+        <p className="today-talk-prompt">“{todayTalkPrompt}”</p>
       </section>
 
       <CitiesHub holidays={autoCulture.holidays} dayCycles={autoCulture.dayCycles} t={t} compact />
 
-      <section className="today-more glass-panel" aria-labelledby="today-more-heading">
-        <h2 id="today-more-heading" className="today-more-title">
-          {t('today_more')}
-        </h2>
-        <div className="today-more-grid">
-          {moreSlots.map((s) => (
-            <div key={s} className="today-mini-card">
-              <div className="today-mini-label">{slotTitles[s]}</div>
-              <div className="today-mini-body">
-                {s === 0 && ontd && <p className="today-mini-text">{ontd.text.slice(0, 160)}{ontd.text.length > 160 ? '…' : ''}</p>}
-                {s === 1 && meal && <p className="today-mini-text">{meal.strMeal}</p>}
-                {s === 2 && phrase && <p className="today-mini-text">“{phrase.word}” — {phrase.translation}</p>}
-                {s === 3 && fact && <p className="today-mini-text">{fact.extract.slice(0, 160)}{fact.extract.length > 160 ? '…' : ''}</p>}
-                {((s === 0 && !ontd) || (s === 1 && !meal) || (s === 2 && !phrase) || (s === 3 && !fact)) && (
-                  <p className="today-muted">—</p>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
       <SquadRadio radios={autoCulture.radios} t={t} />
-      <div className="desktop-only">
-        <SystemDashboard />
-      </div>
 
       <div className="glass-panel kudos-panel today-kudos">
         <div className="panel-header">
@@ -510,9 +539,8 @@ interface ConnectProps {
   t: (k: string) => string;
   squad: UserStatus[];
   setStatus: (userId: string, status: UserStatus) => Promise<void>;
-  onThisDayText?: string | null;
 }
-function ConnectTab({ userName, userCityId, icebreakers, onPostToWall, t, squad, setStatus, onThisDayText }: ConnectProps) {
+function ConnectTab({ userName, userCityId, icebreakers, onPostToWall, t, squad, setStatus }: ConnectProps) {
   const moods = getMoods();
   const [userId] = useState(() => {
     let id = localStorage.getItem('dupoind_userId');
@@ -534,7 +562,7 @@ function ConnectTab({ userName, userCityId, icebreakers, onPostToWall, t, squad,
   }, [userId, userName, userCityId, setStatus]);
 
   useEffect(() => {
-    if (available) updatePresence(available, mood);
+    void updatePresence(available, mood);
   }, [available, mood, updatePresence]);
 
   const toggleAvailable = async () => {
@@ -542,15 +570,10 @@ function ConnectTab({ userName, userCityId, icebreakers, onPostToWall, t, squad,
     await updatePresence(next, mood);
   };
 
-  const iceList = useMemo(() => {
-    const base = icebreakers.length > 0 ? icebreakers : [t('icebreaker_default')];
-    const raw = onThisDayText?.trim();
-    if (raw) {
-      const short = raw.length > 160 ? `${raw.slice(0, 160)}…` : raw;
-      return [`📚 ${short} — ${t('icebreaker_thoughts')}`, ...base];
-    }
-    return base;
-  }, [icebreakers, onThisDayText, t]);
+  const iceList = useMemo(
+    () => (icebreakers.length > 0 ? icebreakers : [t('icebreaker_default')]),
+    [icebreakers, t]
+  );
 
   const spin = async () => {
     setSpinning(true); setDone(false); setCrew([]); setIcebreaker(''); setAnswer(''); setAnswered(false);
@@ -583,16 +606,14 @@ function ConnectTab({ userName, userCityId, icebreakers, onPostToWall, t, squad,
             <span className={`presence-dot ${available ? 'green' : 'grey'}`} />
             {available ? `${t('available')} 🟢` : `${t('unavailable')} ⚫`}
           </button>
-          {available && (
-            <div className="mood-picker">
-              <span className="mood-label">{t('status_prompt')}</span>
-              <div className="mood-options">
-                {moods.map((m) => (
-                  <button key={m} className={`mood-btn ${mood === m ? 'active' : ''}`} onClick={() => setMood(m)}>{m}</button>
-                ))}
-              </div>
+          <div className="mood-picker">
+            <span className="mood-label">{t('status_prompt')}</span>
+            <div className="mood-options">
+              {moods.map((m) => (
+                <button key={m} type="button" className={`mood-btn ${mood === m ? 'active' : ''}`} onClick={() => setMood(m)}>{m}</button>
+              ))}
             </div>
-          )}
+          </div>
         </div>
         {availableSquad.length > 0 && (
           <div className="available-squad">
@@ -754,6 +775,7 @@ export default function App() {
   const adminAuth = useAdminAuth();
   const { squad, setStatus } = usePresence();
   const { sendMsg } = useGlobalChat();
+  const myPresenceDoc = useMyPresenceDoc(!!user, activeTab);
 
   useEffect(() => {
     const html = document.documentElement;
@@ -767,25 +789,31 @@ export default function App() {
   // Initialize the Living App Brain
   useLivingApp();
   
-  // Self-Feeding Alert System: Auto-post holidays/stats to the Wall & Chat
-  const hasPostedHoliday = useRef<Set<string>>(new Set());
+  // Self-Feeding Alert System: Auto-post holidays (once per holiday/city, persisted; varied copy)
   useEffect(() => {
     if (!user) return;
     const assistant = getHubConfig().systemAssistantName;
+    const tplKeys = ['holiday_alert_a', 'holiday_alert_b', 'holiday_alert_c'] as const;
+    const wallEmojis = ['🎉', '🎊', '🥳', '✨', '🌟'];
     let cancelled = false;
     void (async () => {
+      const posted = readPostedHolidayKeys();
       for (const [city, holiday] of Object.entries(autoCulture.holidays)) {
         if (!holiday || cancelled) continue;
         const key = `${holiday.date}_${city}`;
-        if (hasPostedHoliday.current.has(key)) continue;
-        hasPostedHoliday.current.add(key);
+        if (posted.has(key)) continue;
 
         const hDate = new Date(holiday.date);
         const diff = Math.ceil((hDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-        const timing = diff === 0 ? t('today') : t('in_days', { n: String(diff) });
+        if (diff < -1 || diff > 45) continue;
 
         const cityLabel = getCityById(city)?.displayName ?? city;
-        const content = t('holiday_alert', {
+        const timing = diff === 0 ? t('today') : t('in_days', { n: String(diff) });
+        const variant =
+          (city.split('').reduce((a, ch) => a + ch.charCodeAt(0), 0) + (holiday.date?.length ?? 0)) %
+          tplKeys.length;
+        const tpl = tplKeys[variant];
+        const content = t(tpl, {
           name: holiday.localName,
           when: timing,
           city: cityLabel,
@@ -801,12 +829,15 @@ export default function App() {
           city: 'System',
           cityId: 'system',
           content,
-          emoji: '🎉',
+          emoji: wallEmojis[variant % wallEmojis.length],
           likes: [],
           time: new Date().toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' }),
           translations: trans,
           createdAt: serverTimestamp(),
         });
+
+        posted.add(key);
+        writePostedHolidayKeys(posted);
       }
     })();
     return () => {
@@ -822,8 +853,6 @@ export default function App() {
   const handleSeed = async () => {
     if (!confirm('Dit voegt standaard data toe aan Firestore. Doorgaan?')) return;
 
-    const initialPolls = INITIAL_POLLS.map((p) => ({ ...p, createdAt: new Date().toISOString() }));
-
     await seed({
       facts: seedDefaults.seedFacts,
       wotd: seedDefaults.seedWotd,
@@ -832,12 +861,6 @@ export default function App() {
       dishes: seedDefaults.seedDishes as Dish[],
       quiz: QUIZ_QUESTIONS,
     });
-
-    const { addDoc, collection } = await import('firebase/firestore');
-    const { db } = await import('./firebase');
-    for (const poll of initialPolls) {
-      await addDoc(collection(db, 'polls'), poll);
-    }
 
     alert('Database gevuld! Ververs de app.');
   };
@@ -879,7 +902,6 @@ export default function App() {
           <button type="button" className={`tab-btn ${activeTab === 'dashboard' ? 'active' : ''}`} title={t('today_tab')} onClick={() => setActiveTab('dashboard')}><Home size={18} aria-hidden /> <span className="tab-label">{t('today_tab')}</span></button>
           <button type="button" className={`tab-btn ${activeTab === 'connect' ? 'active' : ''}`} title={t('connect')} onClick={() => setActiveTab('connect')}><Shuffle size={18} aria-hidden /> <span className="tab-label">{t('connect')}</span></button>
           <button type="button" className={`tab-btn ${activeTab === 'wall' ? 'active' : ''}`} title={t('wall')} onClick={() => setActiveTab('wall')}><LayoutGrid size={18} aria-hidden /> <span className="tab-label">{t('wall')}</span></button>
-          <button type="button" className={`tab-btn ${activeTab === 'polls' ? 'active' : ''}`} title={t('polls')} onClick={() => setActiveTab('polls')}><BarChart2 size={18} aria-hidden /> <span className="tab-label">{t('polls')}</span></button>
           <button type="button" className={`tab-btn ${activeTab === 'quiz' ? 'active' : ''}`} title={t('quiz')} onClick={() => setActiveTab('quiz')}><Trophy size={18} aria-hidden /> <span className="tab-label">{t('quiz')}</span></button>
           <button type="button" className={`tab-btn ${activeTab === 'ideas' ? 'active' : ''}`} title={t('ideas')} onClick={() => setActiveTab('ideas')}><Lightbulb size={18} aria-hidden /> <span className="tab-label">{t('ideas')}</span></button>
           <button type="button" className={`tab-btn ${activeTab === 'chat' ? 'active' : ''}`} title={t('global_chat')} onClick={() => setActiveTab('chat')}><MessageSquare size={18} aria-hidden /> <span className="tab-label">{t('global_chat')}</span></button>
@@ -896,11 +918,15 @@ export default function App() {
             {/* Premium Mood Glow Implementation */}
             {(() => {
               const myPresence = squad.find(s => s.name === user.name);
-              const moodGlow = myPresence?.mood === '🔥' ? 'glow-fire' : 
-                               myPresence?.mood === '😊' ? 'glow-gold' : 
-                               myPresence?.mood === '🫠' ? 'glow-chill' : '';
+              const mood =
+                myPresence?.mood ??
+                (myPresenceDoc?.name === user.name ? myPresenceDoc.mood : undefined);
+              const moodGlow =
+                mood === '🔥' ? 'glow-fire' :
+                mood === '😊' ? 'glow-gold' :
+                mood === '🫠' ? 'glow-chill' : '';
               return (
-                <div className={`avatar ${cityId} ${moodGlow}`} title={myPresence?.mood || 'Vibe'}>
+                <div className={`avatar ${cityId} ${moodGlow}`} title={mood || 'Vibe'}>
                   {user.name[0]}
                 </div>
               );
@@ -911,7 +937,17 @@ export default function App() {
       </header>
       <div className={`app-main-scroll ${activeTab === 'chat' ? 'app-main-scroll--chat' : ''}`}>
         <main className={activeTab === 'chat' ? 'app-main-inner app-main-inner--chat' : 'app-main-inner'} lang={lang === 'TA' ? 'ta' : lang === 'NL' ? 'nl' : lang === 'PT' ? 'pt' : 'en'}>
-          {activeTab === 'dashboard' && <DashboardTab userName={user.name} userCity={user.city} userCityId={cityId} wotd={wotd} autoCulture={autoCulture} t={t} />}
+          {activeTab === 'dashboard' && (
+            <DashboardTab
+              userName={user.name}
+              userCity={user.city}
+              userCityId={cityId}
+              wotd={wotd}
+              icebreakers={icebreakers}
+              autoCulture={autoCulture}
+              t={t}
+            />
+          )}
           {activeTab === 'connect' && (
             <ConnectTab
               userName={user.name}
@@ -921,11 +957,9 @@ export default function App() {
               t={t}
               squad={squad}
               setStatus={setStatus}
-              onThisDayText={autoCulture.onThisDay?.text ?? null}
             />
           )}
           {activeTab === 'wall' && <CultureWallTab userName={user.name} userCityId={cityId} t={t} />}
-          {activeTab === 'polls' && <PollsTab userName={user.name} userCityId={cityId} />}
           {activeTab === 'quiz' && (
             <QuizTab
               questions={quizQuestions}

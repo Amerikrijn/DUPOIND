@@ -101,27 +101,6 @@ export function useAutomatedCulture(uiLang: Lang = 'EN') {
           setDayCycles((prev) => ({ ...prev, [city.id]: null }));
         }
 
-        try {
-          const res = await fetch(
-            `https://de1.api.radio-browser.info/json/stations/bycountry/${encodeURIComponent(details.countryName)}?limit=5&order=clickcount&reverse=true`
-          );
-          if (res.ok) {
-            const data = await res.json();
-            if (data && data.length > 0) {
-              const station = data.find((s: { favicon?: string }) => s.favicon) || data[0];
-              setRadios((prev) => ({
-                ...prev,
-                [city.id]: {
-                  name: station.name,
-                  url: station.url_resolved,
-                  favicon: station.favicon,
-                },
-              }));
-            }
-          }
-        } catch {
-          /* radio optional */
-        }
       });
 
       const fetchMeal = async () => {
@@ -161,6 +140,57 @@ export function useAutomatedCulture(uiLang: Lang = 'EN') {
 
     fetchData();
   }, [uiLang]);
+
+  /** Radio: pick random stations from a larger pool; refresh on an interval so the row stays fresh. */
+  useEffect(() => {
+    const cfg = getHubConfig();
+    let cancelled = false;
+    const ROTATE_MS = 15 * 60 * 1000;
+
+    async function refreshRadios() {
+      await Promise.all(
+        cfg.cities.map(async (city) => {
+          const name = city.countryName;
+          const offset = Math.floor(Math.random() * 8) * 10;
+          try {
+            const res = await fetch(
+              `https://de1.api.radio-browser.info/json/stations/bycountry/${encodeURIComponent(name)}?limit=50&offset=${offset}&order=clickcount&reverse=true`
+            );
+            if (!res.ok) return;
+            const data = (await res.json()) as {
+              name?: string;
+              url?: string;
+              url_resolved?: string;
+              favicon?: string;
+            }[];
+            if (!data?.length || cancelled) return;
+            const usable = data.filter((s) => s.url_resolved || s.url);
+            const pool = usable.length > 0 ? usable : data;
+            const station = pool[Math.floor(Math.random() * pool.length)];
+            setRadios((prev) => ({
+              ...prev,
+              [city.id]: {
+                name: station.name || 'Radio',
+                url: station.url_resolved || station.url || '',
+                favicon: station.favicon || '',
+              },
+            }));
+          } catch {
+            /* optional */
+          }
+        })
+      );
+    }
+
+    void refreshRadios();
+    const id = window.setInterval(() => {
+      void refreshRadios();
+    }, ROTATE_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, []);
 
   return { holidays, facts, meal, dayCycles, radios, loading, onThisDay };
 }
