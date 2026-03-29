@@ -21,14 +21,26 @@ let cached: HubConfig | null = null;
 
 function parseHubConfig(): HubConfig {
   const raw = import.meta.env.VITE_HUB_CONFIG;
+  const base = hubDefaults as HubConfig;
+  
   if (raw && typeof raw === 'string' && raw.trim().length > 0) {
     try {
-      return JSON.parse(raw) as HubConfig;
+      const overrides = JSON.parse(raw);
+      return {
+        ...base,
+        ...overrides,
+        // Deep merge cities if they exist as an array
+        cities: Array.isArray(overrides.cities) ? overrides.cities : base.cities,
+        // Ensure other critical objects are merged
+        newsFeeds: { ...base.newsFeeds, ...overrides.newsFeeds },
+        ipCountryToDefaultCity: { ...base.ipCountryToDefaultCity, ...overrides.ipCountryToDefaultCity },
+        ipCountryToLang: { ...base.ipCountryToLang, ...overrides.ipCountryToLang },
+      } as HubConfig;
     } catch {
       console.warn('[DUPOIND] VITE_HUB_CONFIG is invalid JSON; using hub.defaults.json');
     }
   }
-  return hubDefaults as HubConfig;
+  return base;
 }
 
 export function getHubConfig(): HubConfig {
