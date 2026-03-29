@@ -54,14 +54,15 @@ export async function translateText(text: string, toLang: 'nl' | 'pt' | 'ta' | '
 }
 
 /**
- * Returns a full translation object for all three DUPOIND languages.
+ * Returns translation objects for NL, PT, TA and EN (for UI language switching).
  */
 export async function getFullTranslation(text: string, fromLang?: string) {
-  const [nl, pt, ta] = await Promise.all([
+  const [nl, pt, ta, en] = await Promise.all([
     translateText(text, 'nl', fromLang),
     translateText(text, 'pt', fromLang),
-    translateText(text, 'ta', fromLang)
+    translateText(text, 'ta', fromLang),
+    translateText(text, 'en', fromLang),
   ]);
 
-  return { nl, pt, ta };
+  return { nl, pt, ta, en };
 }

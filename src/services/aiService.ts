@@ -1,7 +1,8 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI, GoogleGenerativeAIFetchError } from "@google/generative-ai";
+import { getGeminiApiKey } from "../config/geminiEnv";
 
 const SYSTEM_PROMPT = `
-You are Dupo-Atlas, the intelligent cultural assistant for the DUPOIND Cultural Hub. 
+You are Dupo-Atlas, the intelligent cultural assistant for the DUPOIND Cultural Hub.
 Your goal is to connect three squads: Utrecht (Netherlands), Lisbon (Portugal), and Chennai (India).
 
 Guidelines:
@@ -11,63 +12,144 @@ Guidelines:
 4. Social: Encourage cross-team collaboration. If someone mentions a city, tell them something cool about another one.
 5. Limits: Keep responses concise (max 3-4 sentences) as this is a chat interface.
 6. Tone: Use relevant emojis to keep it "squad-like". 🌐🚀✨
-`;
+`.trim();
 
-export async function getAssistantResponse(userMsg: string): Promise<string | null> {
-  const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-  
+export type AssistantErrorCode =
+  | "missing_key"
+  | "invalid_key"
+  | "quota"
+  | "permission"
+  | "model_unavailable"
+  | "safety_blocked"
+  | "network"
+  | "unknown";
+
+export type AssistantResult =
+  | { ok: true; text: string }
+  | { ok: false; code: AssistantErrorCode; detail?: string };
+
+function classifyFetchError(e: GoogleGenerativeAIFetchError): AssistantErrorCode {
+  const status = e.status;
+  const msg = (e.message || "").toLowerCase();
+  if (status === 429 || msg.includes("resource exhausted") || msg.includes("quota")) {
+    return "quota";
+  }
+  if (status === 403 || msg.includes("permission") || msg.includes("forbidden")) {
+    return "permission";
+  }
+  if (
+    status === 400 &&
+    (msg.includes("api key not valid") ||
+      msg.includes("invalid api key") ||
+      msg.includes("invalid_argument"))
+  ) {
+    return "invalid_key";
+  }
+  if (status === 404 || msg.includes("not found") || msg.includes("was not found")) {
+    return "model_unavailable";
+  }
+  if (msg.includes("blocked") || msg.includes("safety") || msg.includes("harm")) {
+    return "safety_blocked";
+  }
+  if (status === 401) {
+    return "invalid_key";
+  }
+  return "unknown";
+}
+
+function classifyUnknownError(e: unknown): AssistantErrorCode {
+  if (e instanceof GoogleGenerativeAIFetchError) {
+    return classifyFetchError(e);
+  }
+  const msg = e instanceof Error ? e.message : String(e);
+  const lower = msg.toLowerCase();
+  if (lower.includes("failed to fetch") || lower.includes("networkerror") || lower.includes("load failed")) {
+    return "network";
+  }
+  return "unknown";
+}
+
+/**
+ * Tries several model IDs (Google AI Studio / Generative Language API).
+ * Order: newest stable first; versioned fallbacks avoid 404 when names change.
+ */
+const MODELS_TO_TRY = [
+  "gemini-2.5-flash",
+  "gemini-2.0-flash",
+  "gemini-2.0-flash-001",
+  "gemini-1.5-flash",
+  "gemini-1.5-flash-002",
+  "gemini-1.5-flash-001",
+  "gemini-1.5-pro",
+  "gemini-1.5-pro-002",
+];
+
+export async function getAssistantResponse(userMsg: string): Promise<AssistantResult> {
+  const API_KEY = getGeminiApiKey();
+
   if (!API_KEY) {
-    console.warn("Dupo-Atlas: VITE_GEMINI_API_KEY is missing from environment.");
-    return null;
-  }
-
-  // Debug log (safe)
-  console.log(`Dupo-Atlas diagnostic: Key detected (${API_KEY.substring(0, 4)}...${API_KEY.substring(API_KEY.length - 4)})`);
-
-  try {
-    const genAI = new GoogleGenerativeAI(API_KEY);
-    
-    // Function to try a specific model
-    const tryModel = async (modelName: string) => {
-      try {
-        console.log(`Dupo-Atlas: Trying AI model ${modelName}...`);
-        const model = genAI.getGenerativeModel({ model: modelName });
-        const result = await model.generateContent([
-          SYSTEM_PROMPT,
-          `User says: ${userMsg}`
-        ]);
-        const response = await result.response;
-        return response.text();
-      } catch (e: unknown) {
-        const errMsg = e instanceof Error ? e.message : String(e);
-        console.warn(`Dupo-Atlas: ${modelName} attempt failed:`, errMsg);
-        return null;
-      }
+    return {
+      ok: false,
+      code: "missing_key",
+      detail:
+        "VITE_GEMINI_API_KEY is not set in the build. Add it in Vercel env and redeploy.",
     };
+  }
 
-    // Attempt models in a specific priority order for maximum compatibility
-    const modelsToTry = [
-      "gemini-1.5-flash",        // Standard
-      "gemini-pro",              // Legacy but stable
-      "gemini-1.5-flash-8b",     // High availability
-      "gemini-1.5-flash-latest"  // Sometimes required for newer keys
-    ];
+  const genAI = new GoogleGenerativeAI(API_KEY);
 
-    let text = null;
-    for (const modelName of modelsToTry) {
-      text = await tryModel(modelName);
-      if (text) {
-        console.log(`Dupo-Atlas: ${modelName} success!`);
-        break;
+  let lastFailure: AssistantResult | null = null;
+
+  for (const modelName of MODELS_TO_TRY) {
+    try {
+      const model = genAI.getGenerativeModel({
+        model: modelName,
+        systemInstruction: SYSTEM_PROMPT,
+      });
+      const result = await model.generateContent(`User says: ${userMsg}`);
+      const response = await result.response;
+      const text = response.text();
+      if (text?.trim()) {
+        return { ok: true, text: text.trim() };
+      }
+    } catch (e: unknown) {
+      if (import.meta.env.DEV) {
+        console.warn(`[Dupo-Atlas] ${modelName}:`, e);
+      }
+      if (e instanceof GoogleGenerativeAIFetchError) {
+        const code = classifyFetchError(e);
+        const extra =
+          e.errorDetails && e.errorDetails.length > 0
+            ? ` ${JSON.stringify(e.errorDetails)}`
+            : '';
+        lastFailure = { ok: false, code, detail: e.message + extra };
+        if (code === "model_unavailable") {
+          continue;
+        }
+        if (code === "invalid_key" || code === "quota" || code === "permission") {
+          return lastFailure;
+        }
+        if (code === "safety_blocked") {
+          return lastFailure;
+        }
+        continue;
+      }
+      const code = classifyUnknownError(e);
+      const detail = e instanceof Error ? e.message : String(e);
+      lastFailure = { ok: false, code, detail };
+      if (code === "network") {
+        return lastFailure;
       }
     }
-
-    if (!text) throw new Error("All Gemini models failed (404/Quota/Auth). Check GCP API library enablement.");
-    return text;
-  } catch (err: unknown) {
-    if (err instanceof Error) {
-      console.error("Dupo-Atlas AI Error:", err.message);
-    }
-    return null;
   }
+
+  if (lastFailure) {
+    return lastFailure;
+  }
+
+  return {
+    ok: false,
+    code: "model_unavailable",
+    detail: "No Gemini model accepted the request. Enable Generative Language API and check model access.",
+  };
 }

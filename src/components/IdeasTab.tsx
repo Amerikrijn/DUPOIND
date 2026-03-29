@@ -102,7 +102,7 @@ export function IdeasTab({ userName, userCityId }: { userName: string, userCityI
                 {!isRealized && (
                   <button 
                     className={`btn-icon-sm ${hasVoted ? 'voted' : ''}`} 
-                    onClick={() => toggleVote(idea.id, userName, hasVoted)}
+                    onClick={() => toggleVote(idea.id, userName, hasVoted, userCityId)}
                     style={{ background: hasVoted ? 'var(--accent)' : 'rgba(255,255,255,0.1)', padding: '0.4rem 0.8rem', width: 'auto', borderRadius: '8px' }}
                   >
                     <ThumbsUp size={14} fill={hasVoted ? 'white' : 'none'} />

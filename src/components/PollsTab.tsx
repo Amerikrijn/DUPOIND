@@ -53,7 +53,7 @@ export function PollsTab({ userName, userCityId }: { userName: string; userCityI
                   const pct = totalVotes > 0 ? Math.round(((opt.votes?.length || 0) / totalVotes) * 100) : 0;
                   const voted = userVote === i;
                   return (
-                    <button key={i} className={`poll-option ${voted ? 'voted' : ''}`} onClick={() => vote(poll.id, i, userName)}>
+                    <button key={i} className={`poll-option ${voted ? 'voted' : ''}`} onClick={() => vote(poll.id, i, userName, userCityId)}>
                       <div className="poll-option-bar" style={{ width: `${pct}%` }} />
                       <span className="poll-option-label">{opt.label}</span>
                       <span className="poll-option-pct">{pct}%</span>

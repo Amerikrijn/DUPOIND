@@ -1,6 +1,12 @@
 import { useState, useEffect } from 'react';
 import { getHubConfig } from '../config/appConfig';
 import { fetchNextPublicHoliday, type Holiday } from '../services/nagerHolidays';
+import {
+  fetchOnThisDayHighlight,
+  wikiLangFromUi,
+  type OnThisDayHighlight,
+} from '../services/wikipediaOnThisDay';
+import type { Lang } from './useTranslation';
 
 export type { Holiday };
 
@@ -30,12 +36,13 @@ export interface RadioStation {
   favicon: string;
 }
 
-export function useAutomatedCulture() {
+export function useAutomatedCulture(uiLang: Lang = 'EN') {
   const [holidays, setHolidays] = useState<Record<string, Holiday | null>>({});
   const [facts, setFacts] = useState<Record<string, CityFact | null>>({});
   const [meal, setMeal] = useState<MealInspiration | null>(null);
   const [dayCycles, setDayCycles] = useState<Record<string, DayCycle | null>>({});
   const [radios, setRadios] = useState<Record<string, RadioStation | null>>({});
+  const [onThisDay, setOnThisDay] = useState<OnThisDayHighlight | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -143,11 +150,17 @@ export function useAutomatedCulture() {
       };
 
       await Promise.all([...fetchPromises, fetchMeal()]);
+      try {
+        const otd = await fetchOnThisDayHighlight(wikiLangFromUi(uiLang));
+        setOnThisDay(otd);
+      } catch {
+        setOnThisDay(null);
+      }
       setLoading(false);
     }
 
     fetchData();
-  }, []);
+  }, [uiLang]);
 
-  return { holidays, facts, meal, dayCycles, radios, loading };
+  return { holidays, facts, meal, dayCycles, radios, loading, onThisDay };
 }

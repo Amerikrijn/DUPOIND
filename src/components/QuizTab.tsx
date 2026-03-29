@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Trophy, Check, X, Star, Lock } from 'lucide-react';
-import { useQuizScores } from '../hooks/useFirestore';
+import { useQuizScores, recordEngagementSignal } from '../hooks/useFirestore';
 import { useTranslation } from '../hooks/useTranslation';
 import type { QuizQuestion } from '../types';
 
@@ -11,7 +11,17 @@ interface ScoreEntry {
   createdAt?: { seconds: number; nanoseconds: number };
 }
 
-export function QuizTab({ questions, userName, userCityId }: { questions: QuizQuestion[]; userName: string; userCityId: string }) {
+export function QuizTab({
+  questions,
+  loading = false,
+  userName,
+  userCityId,
+}: {
+  questions: QuizQuestion[];
+  loading?: boolean;
+  userName: string;
+  userCityId: string;
+}) {
   const { scores, saveScore } = useQuizScores();
   const { t } = useTranslation();
   const [qIdx, setQIdx] = useState(-1);
@@ -50,6 +60,11 @@ export function QuizTab({ questions, userName, userCityId }: { questions: QuizQu
     } else {
       setFinished(true);
       await saveScore(userName, userCityId, score);
+      void recordEngagementSignal('quiz_complete', {
+        userName,
+        cityId: userCityId,
+        metadata: { score },
+      });
       const today = new Date().toISOString().split('T')[0];
       localStorage.setItem(`dupoind_quiz_${userName}_${today}`, 'true');
     }
@@ -68,6 +83,17 @@ export function QuizTab({ questions, userName, userCityId }: { questions: QuizQu
       return s.name === userName && sDate === today;
     });
   }, [scores, userName]);
+
+  if (loading && questions.length === 0) {
+    return (
+      <div className="quiz-container">
+        <div className="glass-panel" style={{ textAlign: 'center', padding: '3rem 2.5rem' }}>
+          <div className="spinner-sm" style={{ width: '32px', height: '32px', margin: '0 auto 1rem' }} />
+          <p style={{ opacity: 0.8 }}>{t('loading')}</p>
+        </div>
+      </div>
+    );
+  }
 
   if (qIdx === -1) {
     return (

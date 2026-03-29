@@ -4,7 +4,39 @@ import {
   orderBy, serverTimestamp, updateDoc, doc, arrayUnion, arrayRemove, limit
 } from 'firebase/firestore';
 import { db } from '../firebase';
-import type { WallPost, KudoEntry, Poll, UserStatus, Dish, QuizQuestion, Idea, SystemLog } from '../types';
+import type {
+  WallPost,
+  KudoEntry,
+  Poll,
+  UserStatus,
+  Dish,
+  QuizQuestion,
+  Idea,
+  SystemLog,
+  EngagementKind,
+} from '../types';
+import { ENGAGEMENT_SIGNALS_COLLECTION } from '../lib/livingHub';
+
+export async function recordEngagementSignal(
+  kind: EngagementKind,
+  payload: {
+    userName: string;
+    cityId: string;
+    metadata?: Record<string, string | number | boolean>;
+  }
+): Promise<void> {
+  try {
+    await addDoc(collection(db, ENGAGEMENT_SIGNALS_COLLECTION), {
+      kind,
+      userName: payload.userName,
+      cityId: payload.cityId,
+      metadata: payload.metadata ?? {},
+      createdAt: serverTimestamp(),
+    });
+  } catch (e) {
+    if (import.meta.env.DEV) console.warn('[engagement]', e);
+  }
+}
 
 // ── Wall Posts ──────────────────────────────────────────
 export function useWallPosts() {
@@ -27,6 +59,14 @@ export function useWallPosts() {
   const toggleLike = async (postId: string, userName: string, liked: boolean) => {
     const ref = doc(db, 'wallPosts', postId);
     await updateDoc(ref, { likes: liked ? arrayRemove(userName) : arrayUnion(userName) });
+    if (!liked) {
+      const post = posts.find((p) => p.id === postId);
+      void recordEngagementSignal('wall_like', {
+        userName,
+        cityId: typeof post?.cityId === 'string' ? post.cityId : 'system',
+        metadata: { postId },
+      });
+    }
   };
 
   return { posts, loading, addPost, toggleLike };
@@ -67,7 +107,7 @@ export function usePolls() {
     await addDoc(collection(db, 'polls'), { ...poll, createdAt: serverTimestamp() });
   };
 
-  const vote = async (pollId: string, optionIndex: number, userName: string) => {
+  const vote = async (pollId: string, optionIndex: number, userName: string, cityId: string) => {
     const ref = doc(db, 'polls', pollId);
     // Remove vote from all options first, then add to chosen
     const poll = polls.find(p => p.id === pollId);
@@ -82,6 +122,11 @@ export function usePolls() {
       };
     });
     await updateDoc(ref, { options: newOptions });
+    void recordEngagementSignal('poll_vote', {
+      userName,
+      cityId,
+      metadata: { pollId, optionIndex },
+    });
   };
 
   return { polls, createPoll, vote };
@@ -221,7 +266,7 @@ export function useQuizScores() {
 }
 
 // ── Global Chat ─────────────────────────────────────────
-export type ChatMsg = { id:string, author:string, text:string, lang:string, trans: {nl:string, pt:string, ta:string}, createdAt: { seconds: number, nanoseconds: number } | null };
+export type ChatMsg = { id:string, author:string, text:string, lang:string, trans: {nl:string, pt:string, ta:string, en?:string}, createdAt: { seconds: number, nanoseconds: number } | null };
 export function useGlobalChat() {
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   useEffect(() => {
@@ -298,9 +343,16 @@ export function useIdeas() {
     });
   };
 
-  const toggleVote = async (ideaId: string, userName: string, voted: boolean) => {
+  const toggleVote = async (ideaId: string, userName: string, voted: boolean, cityId: string) => {
     const ref = doc(db, 'ideas', ideaId);
     await updateDoc(ref, { votes: voted ? arrayRemove(userName) : arrayUnion(userName) });
+    if (!voted) {
+      void recordEngagementSignal('idea_vote', {
+        userName,
+        cityId,
+        metadata: { ideaId },
+      });
+    }
   };
 
   const updateStatus = async (ideaId: string, status: 'pending' | 'realized' | 'rejected') => {

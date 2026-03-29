@@ -21,12 +21,14 @@ export function useLivingApp() {
   const updateStatusRef = useRef(updateStatus);
   const createPollRef = useRef(createPoll);
 
-  ideasRef.current = ideas;
-  postsRef.current = posts;
-  kudosRef.current = kudos;
-  addPostRef.current = addPost;
-  updateStatusRef.current = updateStatus;
-  createPollRef.current = createPoll;
+  useEffect(() => {
+    ideasRef.current = ideas;
+    postsRef.current = posts;
+    kudosRef.current = kudos;
+    addPostRef.current = addPost;
+    updateStatusRef.current = updateStatus;
+    createPollRef.current = createPoll;
+  }, [ideas, posts, kudos, addPost, updateStatus, createPoll]);
 
   useEffect(() => {
     const cfg = getHubConfig();

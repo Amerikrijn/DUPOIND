@@ -1,15 +1,16 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   Globe, Heart, MessageSquare, Send,
   Shuffle, Camera, Home, LayoutGrid, Lock, ArrowRight, X, Check,
-  Lightbulb, Image, BarChart2, Zap, Trophy, Utensils
+  Lightbulb, Image, BarChart2, Zap, Trophy
 } from 'lucide-react';
 import './index.css';
 
-import { useWallPosts, useKudos, usePresence, useCultureData, useSquadCodes, useQuiz, useGlobalChat } from './hooks/useFirestore';
+import { useWallPosts, useKudos, usePresence, useCultureData, useSquadCodes, useGlobalChat } from './hooks/useFirestore';
+import { useQuizPool } from './hooks/useQuizPool';
 import { useWeather } from './hooks/useWeather';
 import { useAutomatedCulture } from './hooks/useAutomatedCulture';
-import type { Holiday, DayCycle, CityFact, MealInspiration, RadioStation } from './hooks/useAutomatedCulture';
+import type { Holiday, DayCycle, RadioStation } from './hooks/useAutomatedCulture';
 import { useTranslation } from './hooks/useTranslation';
 import type { Lang } from './hooks/useTranslation';
 import { useAdminAuth } from './hooks/useAdminAuth';
@@ -215,7 +216,17 @@ function AdminDashboard({ onSeed, onLogout, codes }: { onSeed: () => void, onLog
 // ─────────────────────────────────────────
 // Cities Hub (real weather + holidays + sun)
 // ─────────────────────────────────────────
-function CitiesHub({ holidays, dayCycles, t }: { holidays: Record<string, Holiday | null>, dayCycles: Record<string, DayCycle | null>, t: (k: string, obj?: Record<string, string | number>) => string }) {
+function CitiesHub({
+  holidays,
+  dayCycles,
+  t,
+  compact = false,
+}: {
+  holidays: Record<string, Holiday | null>;
+  dayCycles: Record<string, DayCycle | null>;
+  t: (k: string, obj?: Record<string, string | number>) => string;
+  compact?: boolean;
+}) {
   const [times, setTimes] = useState<Record<string, string>>({});
   const weather = useWeather();
 
@@ -223,16 +234,35 @@ function CitiesHub({ holidays, dayCycles, t }: { holidays: Record<string, Holida
     const update = () => {
       const now = new Date();
       const tObjs: Record<string, string> = {};
-      getHubCities().forEach((c: any) => { tObjs[c.id] = now.toLocaleTimeString('nl-NL', { timeZone: c.timezone, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }); });
+      getHubCities().forEach((c) => {
+        tObjs[c.id] = compact
+          ? now.toLocaleTimeString('nl-NL', {
+              timeZone: c.timezone,
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: false,
+            })
+          : now.toLocaleTimeString('nl-NL', {
+              timeZone: c.timezone,
+              hour: '2-digit',
+              minute: '2-digit',
+              second: '2-digit',
+              hour12: false,
+            });
+      });
       setTimes(tObjs);
     };
     update(); const iv = setInterval(update, 1000); return () => clearInterval(iv);
-  }, []);
+  }, [compact]);
 
   return (
-    <div className="glass-panel">
-      <div className="panel-header"><Globe className="panel-icon" size={22} /><h2>{t('squad_hubs')}</h2><span className="live-badge">{t('live_weather')}</span></div>
-      <div className="cities-container">
+    <div className={`glass-panel ${compact ? 'cities-hub--compact' : ''}`}>
+      <div className="panel-header">
+        <Globe className="panel-icon" size={compact ? 18 : 22} />
+        <h2>{t('squad_hubs')}</h2>
+        <span className="live-badge">{t('live_weather')}</span>
+      </div>
+      <div className={`cities-container ${compact ? 'cities-container--compact' : ''}`}>
         {getHubCities().map(city => {
           const w = weather[city.id];
           const h = holidays[city.id];
@@ -295,57 +325,7 @@ function SquadRadio({ radios, t }: { radios: Record<string, RadioStation | null>
 }
 
 // ─────────────────────────────────────────
-/* Replaced CulturalFact following the api approach */
-// ─────────────────────────────────────────
-function CulturalFact({ facts, userCityId, t }: { facts: Record<string, CityFact | null>, userCityId: string, t: (k: string) => string }) {
-  const fact = facts[userCityId];
-  const cityName = getCityName(userCityId);
-
-  return (
-    <div className={`glass-panel cultural-fact-panel ${userCityId}`}>
-      <div className="panel-header"><Lightbulb className="panel-icon" size={22} /><h2>{t('fact')}: {cityName}</h2><span className="fact-city-badge">Live API</span></div>
-      {fact ? (
-        <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
-          {fact.thumbnail && <img src={fact.thumbnail.source} alt="" style={{ width: 60, height: 60, borderRadius: '8px', objectFit: 'cover' }} />}
-          <div style={{ flex: 1 }}>
-            <blockquote className="fact-text" style={{ fontSize: '0.85rem', margin: 0 }}>"{fact.extract}"</blockquote>
-            {fact.content_urls && <a href={fact.content_urls.desktop.page} target="_blank" rel="noreferrer" style={{ fontSize: '0.7rem', color: 'var(--accent)', textDecoration: 'none', marginTop: '0.5rem', display: 'inline-block' }}>Lees meer op Wikipedia →</a>}
-          </div>
-        </div>
-      ) : (
-        <p className="auth-hint">Laden van lokale geschiedenis...</p>
-      )}
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────
-// Local Flavors (featuring Global Inspiration)
-// ─────────────────────────────────────────
-function LocalFlavors({ meal, t }: { meal: MealInspiration | null, t: (k: string) => string }) {
-  return (
-    <div className="glass-panel">
-      <div className="panel-header"><Utensils className="panel-icon" size={22} /><h2>{t('inspiration')}</h2><span className="live-badge">TheMealDB API</span></div>
-      {meal ? (
-        <div className="meal-insp-card" style={{ display: 'flex', gap: '1.5rem', background: 'rgba(255,255,255,0.03)', borderRadius: '16px', padding: '1rem', overflow: 'hidden' }}>
-          <img src={meal.strMealThumb} alt={meal.strMeal} style={{ width: '120px', height: '120px', borderRadius: '12px', objectFit: 'cover' }} />
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-            <h3 style={{ fontSize: '1.2rem', marginBottom: '0.5rem' }}>{meal.strMeal}</h3>
-            <p style={{ fontSize: '0.85rem', opacity: 0.7, marginBottom: '1rem' }}>Vandaag een culinair uitstapje! Wat dacht je van dit heerlijke gerecht?</p>
-            <a href={meal.strSource || '#'} target="_blank" rel="noreferrer" className="btn-auth" style={{ padding: '0.5rem 1rem', width: 'fit-content', fontSize: '0.8rem' }}>
-              <Utensils size={14} /> Bekijk Recept
-            </a>
-          </div>
-        </div>
-      ) : (
-        <p className="auth-hint">Vandaag even geen inspiratie... (Laden)</p>
-      )}
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────
-// Dashboard Tab
+// Dashboard Tab (“Vandaag” — mobile-first daily culture)
 // ─────────────────────────────────────────
 interface DashboardProps { 
   userName: string; 
@@ -361,6 +341,11 @@ function DashboardTab({ userName, userCity, userCityId, wotd, autoCulture, t }: 
   const [newKudo, setNewKudo] = useState({ to: '', message: '' });
   const [isTranslating, setIsTranslating] = useState(false);
 
+  const daySlot = useMemo(() => {
+    const d = new Date();
+    return (d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate()) % 4;
+  }, []);
+
   const send = async () => {
     if (!newKudo.to.trim() || !newKudo.message.trim()) return;
     setIsTranslating(true);
@@ -373,46 +358,132 @@ function DashboardTab({ userName, userCity, userCityId, wotd, autoCulture, t }: 
     setNewKudo({ to: '', message: '' }); setShowForm(false); setIsTranslating(false);
   };
 
-  return (
-    <div className="dashboard-grid">
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-        <CitiesHub holidays={autoCulture.holidays} dayCycles={autoCulture.dayCycles} t={t} />
-        <SquadRadio radios={autoCulture.radios} t={t} />
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-          <CulturalFact facts={autoCulture.facts} userCityId={userCityId} t={t} />
-          <div className="glass-panel">
-            <div className="panel-header"><MessageSquare className="panel-icon" size={22} /><h2>{t('phrase')}</h2></div>
-            <div className="wotd-container" style={{ padding: '0.5rem' }}>
-              {wotd.slice(0, 2).map((item, idx) => (
-                <div key={idx} className="wotd-card" style={{ marginBottom: '0.5rem' }}>
-                  <div className={`lang-badge ${item.lang.toLowerCase()}-badge`}>{item.lang}</div>
-                  <div className="wotd-content">
-                    <h3 style={{ fontSize: '1rem' }}>"{item.word}"</h3>
-                    <div className="wotd-translation" style={{ fontSize: '0.8rem' }}>{item.translation}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
+  const fact = autoCulture.facts[userCityId];
+  const ontd = autoCulture.onThisDay;
+  const meal = autoCulture.meal;
+  const phrase = wotd[0];
+
+  const slotTitles = [t('today_slot_calendar'), t('today_slot_food'), t('today_slot_phrase'), t('today_slot_city')];
+
+  const renderPrimary = () => {
+    const tryCalendar = () =>
+      ontd ? (
+        <>
+          <p className="today-readable">{ontd.text}</p>
+          <a className="today-link" href={ontd.url} target="_blank" rel="noreferrer">Wikipedia →</a>
+        </>
+      ) : null;
+    const tryFood = () =>
+      meal ? (
+        <div className="today-meal-row">
+          {meal.strMealThumb && (
+            <img src={meal.strMealThumb} alt="" className="today-meal-thumb" />
+          )}
+          <div>
+            <p className="today-meal-title">{meal.strMeal}</p>
+            <a className="today-link" href={meal.strSource || '#'} target="_blank" rel="noreferrer">
+              {t('inspiration')} →
+            </a>
           </div>
         </div>
-        <LocalFlavors meal={autoCulture.meal} t={t} />
+      ) : null;
+    const tryPhrase = () =>
+      phrase ? (
+        <div>
+          <p className="today-readable today-phrase-word">“{phrase.word}”</p>
+          <p className="today-muted">{phrase.translation}</p>
+        </div>
+      ) : null;
+    const tryCity = () =>
+      fact ? (
+        <div className="today-meal-row">
+          {fact.thumbnail && (
+            <img src={fact.thumbnail.source} alt="" className="today-meal-thumb" />
+          )}
+          <div>
+            <p className="today-readable" style={{ marginBottom: '0.5rem' }}>
+              {fact.extract}
+            </p>
+            {fact.content_urls && (
+              <a className="today-link" href={fact.content_urls.desktop.page} target="_blank" rel="noreferrer">
+                Wikipedia →
+              </a>
+            )}
+          </div>
+        </div>
+      ) : null;
+
+    const order = [tryCalendar, tryFood, tryPhrase, tryCity];
+    const primary = order[daySlot]();
+    if (primary) return primary;
+    for (let i = 0; i < 4; i++) {
+      if (i === daySlot) continue;
+      const alt = order[i]();
+      if (alt) return alt;
+    }
+    return <p className="auth-hint">{t('loading')}</p>;
+  };
+
+  const moreSlots = ([0, 1, 2, 3] as const).filter((s) => s !== daySlot);
+
+  return (
+    <div className="today-page">
+      <section className="today-hero glass-panel" aria-labelledby="today-heading">
+        <p className="today-date-line">
+          {new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}
+        </p>
+        <h1 id="today-heading" className="today-hero-title">
+          {t('today_tab')}
+        </h1>
+        <p className="today-tagline">{t('today_tagline')}</p>
+        <div className="today-primary-label">{slotTitles[daySlot]}</div>
+        <div className="today-primary-body">{renderPrimary()}</div>
+      </section>
+
+      <CitiesHub holidays={autoCulture.holidays} dayCycles={autoCulture.dayCycles} t={t} compact />
+
+      <section className="today-more glass-panel" aria-labelledby="today-more-heading">
+        <h2 id="today-more-heading" className="today-more-title">
+          {t('today_more')}
+        </h2>
+        <div className="today-more-grid">
+          {moreSlots.map((s) => (
+            <div key={s} className="today-mini-card">
+              <div className="today-mini-label">{slotTitles[s]}</div>
+              <div className="today-mini-body">
+                {s === 0 && ontd && <p className="today-mini-text">{ontd.text.slice(0, 160)}{ontd.text.length > 160 ? '…' : ''}</p>}
+                {s === 1 && meal && <p className="today-mini-text">{meal.strMeal}</p>}
+                {s === 2 && phrase && <p className="today-mini-text">“{phrase.word}” — {phrase.translation}</p>}
+                {s === 3 && fact && <p className="today-mini-text">{fact.extract.slice(0, 160)}{fact.extract.length > 160 ? '…' : ''}</p>}
+                {((s === 0 && !ontd) || (s === 1 && !meal) || (s === 2 && !phrase) || (s === 3 && !fact)) && (
+                  <p className="today-muted">—</p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <SquadRadio radios={autoCulture.radios} t={t} />
+      <div className="desktop-only">
         <SystemDashboard />
       </div>
-      <div className="glass-panel kudos-panel">
+
+      <div className="glass-panel kudos-panel today-kudos">
         <div className="panel-header">
           <Heart size={22} color="var(--accent)" fill="var(--accent)" /><h2>{t('kudos')}</h2>
-          <button className="btn-icon-sm" onClick={() => setShowForm(!showForm)}>{showForm ? <X size={16} /> : <Send size={16} />}</button>
+          <button type="button" className="btn-icon-sm" onClick={() => setShowForm(!showForm)}>{showForm ? <X size={16} /> : <Send size={16} />}</button>
         </div>
         {showForm && (
           <div className="kudo-form">
             <input className="kudo-input" placeholder="Naar wie? (bijv. Ananya – Chennai)" value={newKudo.to} onChange={e => setNewKudo({ ...newKudo, to: e.target.value })} />
             <textarea className="kudo-input kudo-textarea" placeholder="Schrijf in jouw eigen taal 🌐" value={newKudo.message} onChange={e => setNewKudo({ ...newKudo, message: e.target.value })} />
-            <button className="btn-kudos" onClick={send} disabled={isTranslating}>
+            <button type="button" className="btn-kudos" onClick={send} disabled={isTranslating}>
               {isTranslating ? 'Vertalen...' : <><Send size={16} /> Verstuur en Vertaal</>}
             </button>
           </div>
         )}
-        <div className="kudos-feed">
+        <div className="kudos-feed kudos-feed--today">
           {kudos.length === 0 && <div className="empty-state">Nog geen kudos. Stuur de eerste! 🚀</div>}
           {kudos.map(k => (
             <div key={k.id} className="kudo-item">
@@ -439,8 +510,9 @@ interface ConnectProps {
   t: (k: string) => string;
   squad: UserStatus[];
   setStatus: (userId: string, status: UserStatus) => Promise<void>;
+  onThisDayText?: string | null;
 }
-function ConnectTab({ userName, userCityId, icebreakers, onPostToWall, t, squad, setStatus }: ConnectProps) {
+function ConnectTab({ userName, userCityId, icebreakers, onPostToWall, t, squad, setStatus, onThisDayText }: ConnectProps) {
   const moods = getMoods();
   const [userId] = useState(() => {
     let id = localStorage.getItem('dupoind_userId');
@@ -470,22 +542,29 @@ function ConnectTab({ userName, userCityId, icebreakers, onPostToWall, t, squad,
     await updatePresence(next, mood);
   };
 
-  const spin = useCallback(async () => {
+  const iceList = useMemo(() => {
+    const base = icebreakers.length > 0 ? icebreakers : [t('icebreaker_default')];
+    const raw = onThisDayText?.trim();
+    if (raw) {
+      const short = raw.length > 160 ? `${raw.slice(0, 160)}…` : raw;
+      return [`📚 ${short} — ${t('icebreaker_thoughts')}`, ...base];
+    }
+    return base;
+  }, [icebreakers, onThisDayText, t]);
+
+  const spin = async () => {
     setSpinning(true); setDone(false); setCrew([]); setIcebreaker(''); setAnswer(''); setAnswered(false);
-    
-    // Use real presence data instead of external API
+
     setTimeout(() => {
       const others = squad.filter(s => s.name !== userName);
-      // Pick 2 random users from the squad (or fewer if not enough)
       const shuffled = [...others].sort(() => 0.5 - Math.random());
       const selected = shuffled.slice(0, 2);
-      
+
       setCrew([{ name: 'Jij (You)', cityId: userCityId }, ...selected.map(s => ({ name: s.name, cityId: s.cityId }))]);
-      const iceList = icebreakers.length > 0 ? icebreakers : ['Wat is je favoriete lokale lunch? 🥪'];
       setIcebreaker(iceList[Math.floor(Math.random() * iceList.length)]);
       setSpinning(false); setDone(true);
     }, 1500);
-  }, [userName, userCityId, icebreakers, squad]);
+  };
 
   const postAnswer = async () => {
     if (!answer.trim()) return;
@@ -668,13 +747,22 @@ export default function App() {
   });
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   const { codes } = useSquadCodes();
-  const { questions: quizQuestions } = useQuiz();
+  const { questions: quizQuestions, loading: quizPoolLoading } = useQuizPool();
   const { wotd, icebreakers, seed } = useCultureData();
-  const autoCulture = useAutomatedCulture();
   const { lang, setLang, t } = useTranslation();
+  const autoCulture = useAutomatedCulture(lang);
   const adminAuth = useAdminAuth();
   const { squad, setStatus } = usePresence();
   const { sendMsg } = useGlobalChat();
+
+  useEffect(() => {
+    const html = document.documentElement;
+    const langMap: Record<Lang, string> = { EN: 'en', NL: 'nl', PT: 'pt', TA: 'ta' };
+    html.lang = langMap[lang] ?? 'en';
+    html.dir = 'ltr';
+    html.classList.remove('lang-en', 'lang-nl', 'lang-pt', 'lang-ta');
+    html.classList.add(`lang-${lang.toLowerCase()}` as 'lang-en' | 'lang-nl' | 'lang-pt' | 'lang-ta');
+  }, [lang]);
 
   // Initialize the Living App Brain
   useLivingApp();
@@ -694,13 +782,17 @@ export default function App() {
 
         const hDate = new Date(holiday.date);
         const diff = Math.ceil((hDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-        const timing = diff === 0 ? t('today') : t('in_days').replace('{n}', String(diff));
+        const timing = diff === 0 ? t('today') : t('in_days', { n: String(diff) });
 
         const cityLabel = getCityById(city)?.displayName ?? city;
-        const content = `📢 AUTO-ALERT: ${holiday.localName} (${timing}) in ${cityLabel}! 🎉`;
-        const trans = await getFullTranslation(content, 'nl');
+        const content = t('holiday_alert', {
+          name: holiday.localName,
+          when: timing,
+          city: cityLabel,
+        });
+        const trans = await getFullTranslation(content, lang.toLowerCase());
 
-        await sendMsg(assistant, content, 'NL');
+        await sendMsg(assistant, content, lang);
 
         const { addDoc, collection, serverTimestamp } = await import('firebase/firestore');
         const { db: firestore } = await import('./firebase');
@@ -720,7 +812,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [autoCulture.holidays, user, t, sendMsg]);
+  }, [autoCulture.holidays, user, t, sendMsg, lang]);
 
   const handleLogin = (name: string, city: string) => {
     const u = { name, city }; setUser(u);
@@ -779,19 +871,21 @@ export default function App() {
         };
 
         return (
-          <div className="app-container">
-          <header>
+          <div className="app-layout-root">
+          <div className="app-body-scroll">
+          <header className="app-header-bar">
             <div className="logo-container"><div className="logo-icon"><Globe color="white" size={22} /></div><div className="logo-text">{logoPrefix}<span>{hb.appNameAccentPart}</span></div></div>
-            <nav className="tab-nav desktop-only">
-          <button className={`tab-btn ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}><Home size={18} /> <span className="tab-label">{t('dashboard')}</span></button>
-          <button className={`tab-btn ${activeTab === 'connect' ? 'active' : ''}`} onClick={() => setActiveTab('connect')}><Shuffle size={18} /> <span className="tab-label">{t('connect')}</span></button>
-          <button className={`tab-btn ${activeTab === 'wall' ? 'active' : ''}`} onClick={() => setActiveTab('wall')}><LayoutGrid size={18} /> <span className="tab-label">{t('wall')}</span></button>
-          <button className={`tab-btn ${activeTab === 'polls' ? 'active' : ''}`} onClick={() => setActiveTab('polls')}><BarChart2 size={18} /> <span className="tab-label">{t('polls')}</span></button>
-          <button className={`tab-btn ${activeTab === 'quiz' ? 'active' : ''}`} onClick={() => setActiveTab('quiz')}><Trophy size={18} /> <span className="tab-label">{t('quiz')}</span></button>
-          <button className={`tab-btn ${activeTab === 'ideas' ? 'active' : ''}`} onClick={() => setActiveTab('ideas')}><Lightbulb size={18} /> <span className="tab-label">{t('ideas')}</span></button>
+            <nav className="tab-nav desktop-only" aria-label="Main">
+          <button type="button" className={`tab-btn ${activeTab === 'dashboard' ? 'active' : ''}`} title={t('today_tab')} onClick={() => setActiveTab('dashboard')}><Home size={18} aria-hidden /> <span className="tab-label">{t('today_tab')}</span></button>
+          <button type="button" className={`tab-btn ${activeTab === 'connect' ? 'active' : ''}`} title={t('connect')} onClick={() => setActiveTab('connect')}><Shuffle size={18} aria-hidden /> <span className="tab-label">{t('connect')}</span></button>
+          <button type="button" className={`tab-btn ${activeTab === 'wall' ? 'active' : ''}`} title={t('wall')} onClick={() => setActiveTab('wall')}><LayoutGrid size={18} aria-hidden /> <span className="tab-label">{t('wall')}</span></button>
+          <button type="button" className={`tab-btn ${activeTab === 'polls' ? 'active' : ''}`} title={t('polls')} onClick={() => setActiveTab('polls')}><BarChart2 size={18} aria-hidden /> <span className="tab-label">{t('polls')}</span></button>
+          <button type="button" className={`tab-btn ${activeTab === 'quiz' ? 'active' : ''}`} title={t('quiz')} onClick={() => setActiveTab('quiz')}><Trophy size={18} aria-hidden /> <span className="tab-label">{t('quiz')}</span></button>
+          <button type="button" className={`tab-btn ${activeTab === 'ideas' ? 'active' : ''}`} title={t('ideas')} onClick={() => setActiveTab('ideas')}><Lightbulb size={18} aria-hidden /> <span className="tab-label">{t('ideas')}</span></button>
+          <button type="button" className={`tab-btn ${activeTab === 'chat' ? 'active' : ''}`} title={t('global_chat')} onClick={() => setActiveTab('chat')}><MessageSquare size={18} aria-hidden /> <span className="tab-label">{t('global_chat')}</span></button>
         </nav>
-        <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <select className="lang-select" value={lang} onChange={e => setLang(e.target.value as Lang)}>
+        <div className="header-actions">
+          <select className="lang-select" value={lang} onChange={e => setLang(e.target.value as Lang)} aria-label="Language">
             <option value="EN">🇺🇸 EN</option>
             <option value="NL">🇳🇱 NL</option>
             <option value="PT">🇵🇹 PT</option>
@@ -811,33 +905,45 @@ export default function App() {
                 </div>
               );
             })()}
-            <span style={{ fontSize: '0.9rem' }} className="user-name-label">{user.name}</span>
+            <span className="user-name-label">{user.name}</span>
           </div>
         </div>
       </header>
-      <div className="main-content-layout">
-        <main>
+      <div className={`app-main-scroll ${activeTab === 'chat' ? 'app-main-scroll--chat' : ''}`}>
+        <main className={activeTab === 'chat' ? 'app-main-inner app-main-inner--chat' : 'app-main-inner'} lang={lang === 'TA' ? 'ta' : lang === 'NL' ? 'nl' : lang === 'PT' ? 'pt' : 'en'}>
           {activeTab === 'dashboard' && <DashboardTab userName={user.name} userCity={user.city} userCityId={cityId} wotd={wotd} autoCulture={autoCulture} t={t} />}
-          {activeTab === 'connect' && <ConnectTab userName={user.name} userCityId={cityId} icebreakers={icebreakers} onPostToWall={postToWall} t={t} squad={squad} setStatus={setStatus} />}
+          {activeTab === 'connect' && (
+            <ConnectTab
+              userName={user.name}
+              userCityId={cityId}
+              icebreakers={icebreakers}
+              onPostToWall={postToWall}
+              t={t}
+              squad={squad}
+              setStatus={setStatus}
+              onThisDayText={autoCulture.onThisDay?.text ?? null}
+            />
+          )}
           {activeTab === 'wall' && <CultureWallTab userName={user.name} userCityId={cityId} t={t} />}
           {activeTab === 'polls' && <PollsTab userName={user.name} userCityId={cityId} />}
-          {activeTab === 'quiz' && <QuizTab questions={quizQuestions} userName={user.name} userCityId={cityId} />}
-          {activeTab === 'ideas' && <IdeasTab userName={user.name} userCityId={cityId} />}
-          {activeTab === 'chat' && (
-            <div className="mobile-only">
-              <GlobalChat userName={user.name} />
-            </div>
+          {activeTab === 'quiz' && (
+            <QuizTab
+              questions={quizQuestions}
+              loading={quizPoolLoading}
+              userName={user.name}
+              userCityId={cityId}
+            />
           )}
+          {activeTab === 'ideas' && <IdeasTab userName={user.name} userCityId={cityId} />}
+          {activeTab === 'chat' && <GlobalChat userName={user.name} />}
         </main>
-        <aside className="desktop-side-chat desktop-only">
-          <GlobalChat userName={user.name} />
-        </aside>
       </div>
+          </div>
 
-      <nav className="mobile-bottom-nav">
-        <button className={`nav-item-mobile ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>
+      <nav className="mobile-bottom-nav" aria-label="Mobile">
+        <button type="button" className={`nav-item-mobile ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>
           <Home className="nav-icon" size={20} />
-          <span>{t('dashboard')}</span>
+          <span>{t('today_tab')}</span>
         </button>
         <button className={`nav-item-mobile ${activeTab === 'connect' ? 'active' : ''}`} onClick={() => setActiveTab('connect')}>
           <Shuffle className="nav-icon" size={20} />

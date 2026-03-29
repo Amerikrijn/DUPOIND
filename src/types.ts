@@ -11,7 +11,7 @@ export type WallPost = {
   emoji: string;
   likes: string[]; // array of user names who liked
   time: string;
-  translations: { nl: string; pt: string; ta: string };
+  translations: { nl: string; pt: string; ta: string; en?: string };
 };
 
 export type KudoEntry = {
@@ -92,3 +92,10 @@ export type SystemLog = {
   status: 'success' | 'warning' | 'error';
   details?: string;
 };
+
+/** Lightweight events so the app can learn what people do (no PII in metadata). */
+export type EngagementKind =
+  | 'quiz_complete'
+  | 'poll_vote'
+  | 'wall_like'
+  | 'idea_vote';
