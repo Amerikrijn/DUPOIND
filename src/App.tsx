@@ -26,16 +26,19 @@ import { useLivingApp } from './hooks/useLivingApp';
 import { SystemDashboard } from './components/SystemDashboard';
 
 // ─────────────────────────────────────────
-// Constants
+// Constants & Helpers (Lazy/Safe)
 // ─────────────────────────────────────────
 type Tab = 'dashboard' | 'connect' | 'wall' | 'quiz' | 'polls' | 'chat' | 'ideas';
 
-const CITIES = getHubConfig().cities.map((c) => ({
-  id: c.id,
-  name: c.displayName,
-  flag: c.flag,
-  timezone: c.timezone,
-}));
+function getHubCities() {
+  const cfg = getHubConfig();
+  return (cfg.cities || []).map((c) => ({
+    id: c.id,
+    name: c.displayName,
+    flag: c.flag,
+    timezone: c.timezone,
+  }));
+}
 
 function getCityFlag(cityId: string) {
   return getCityById(cityId)?.flag ?? '🌍';
@@ -220,7 +223,7 @@ function CitiesHub({ holidays, dayCycles, t }: { holidays: Record<string, Holida
     const update = () => {
       const now = new Date();
       const tObjs: Record<string, string> = {};
-      CITIES.forEach(c => { tObjs[c.id] = now.toLocaleTimeString('nl-NL', { timeZone: c.timezone, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }); });
+      getHubCities().forEach((c: any) => { tObjs[c.id] = now.toLocaleTimeString('nl-NL', { timeZone: c.timezone, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }); });
       setTimes(tObjs);
     };
     update(); const iv = setInterval(update, 1000); return () => clearInterval(iv);
@@ -230,7 +233,7 @@ function CitiesHub({ holidays, dayCycles, t }: { holidays: Record<string, Holida
     <div className="glass-panel">
       <div className="panel-header"><Globe className="panel-icon" size={22} /><h2>{t('squad_hubs')}</h2><span className="live-badge">{t('live_weather')}</span></div>
       <div className="cities-container">
-        {CITIES.map(city => {
+        {getHubCities().map(city => {
           const w = weather[city.id];
           const h = holidays[city.id];
           const d = dayCycles[city.id];
@@ -274,7 +277,7 @@ function SquadRadio({ radios, t }: { radios: Record<string, RadioStation | null>
     <div className="glass-panel" style={{ marginTop: '1rem' }}>
       <div className="panel-header"><Zap className="panel-icon" size={22} /><h2>{t('radio')}</h2></div>
       <div style={{ display: 'flex', gap: '1rem', overflowX: 'auto', padding: '0.5rem' }}>
-        {CITIES.map(city => {
+        {getHubCities().map(city => {
           const r = radios[city.id];
           if (!r) return null;
           return (
